@@ -111,11 +111,29 @@ function Toast({ message, onClose }: { message: string; onClose: () => void }) {
   )
 }
 
+const grayButtonStyle = {
+  padding: "0.5rem 1rem",
+  backgroundColor: "#6b7280",
+  color: "white",
+  border: "none",
+  borderRadius: "6px",
+  cursor: "pointer",
+  fontSize: "0.875rem",
+  fontWeight: "500",
+}
+
+const grayButtonDisabledStyle = {
+  ...grayButtonStyle,
+  backgroundColor: "#d1d5db",
+  cursor: "not-allowed",
+}
+
 export default function SenderPage() {
   const [rows, setRows] = useState<{ addr: string; bps: string }[]>([{ addr: "", bps: "" }])
   const [owner, setOwner] = useState<string>("")
   const [amount, setAmount] = useState<string>("0.01")
   const [toast, setToast] = useState<string>("")
+  const [step1Done, setStep1Done] = useState<boolean>(false)
 
   function addRow(): void {
     setRows([...rows, { addr: "", bps: "" }])
@@ -138,6 +156,7 @@ export default function SenderPage() {
   }
 
   function onSetSplit(): void {
+    setStep1Done(true)
     setToast("Split saved")
   }
 
@@ -276,16 +295,7 @@ export default function SenderPage() {
               <button
                 id="btn-add-row"
                 onClick={addRow}
-                style={{
-                  padding: "0.5rem 1rem",
-                  backgroundColor: "#10b981",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontSize: "0.875rem",
-                  fontWeight: "500",
-                }}
+                style={grayButtonStyle}
               >
                 Add Row
               </button>
@@ -293,16 +303,7 @@ export default function SenderPage() {
                 id="btn-remove-row"
                 onClick={removeRow}
                 disabled={rows.length === 1}
-                style={{
-                  padding: "0.5rem 1rem",
-                  backgroundColor: rows.length === 1 ? "#d1d5db" : "#ef4444",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: rows.length === 1 ? "not-allowed" : "pointer",
-                  fontSize: "0.875rem",
-                  fontWeight: "500",
-                }}
+                style={rows.length === 1 ? grayButtonDisabledStyle : grayButtonStyle}
               >
                 Remove Row
               </button>
@@ -333,92 +334,109 @@ export default function SenderPage() {
               borderRadius: "12px",
               padding: "2rem",
               border: "1px solid #e5e7eb",
+              position: "relative",
             }}
           >
-            <h2
-              style={{
-                fontSize: "1.5rem",
-                fontWeight: "600",
-                marginBottom: "1.5rem",
-                color: "#1a1a1a",
-              }}
-            >
-              Send Tip
-            </h2>
-
-            <div style={{ marginBottom: "1rem" }}>
-              <label
+            {!step1Done && (
+              <div
                 style={{
-                  display: "block",
-                  marginBottom: "0.5rem",
-                  fontSize: "0.875rem",
+                  position: "absolute",
+                  top: "1rem",
+                  right: "1rem",
+                  fontSize: "0.75rem",
+                  color: "#9ca3af",
                   fontWeight: "500",
-                  color: "#374151",
                 }}
               >
-                Owner address
-              </label>
-              <input
-                id="owner"
-                type="text"
-                placeholder="0x..."
-                value={owner}
-                onChange={(e) => setOwner(e.target.value)}
+                Step 1 required
+              </div>
+            )}
+            <div style={{ pointerEvents: step1Done ? "auto" : "none", opacity: step1Done ? 1 : 0.5 }}>
+              <h2
                 style={{
-                  width: "100%",
-                  padding: "0.75rem",
-                  border: "1px solid #d1d5db",
-                  borderRadius: "6px",
-                  fontSize: "0.875rem",
-                }}
-              />
-            </div>
-
-            <div style={{ marginBottom: "1.5rem" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "0.5rem",
-                  fontSize: "0.875rem",
-                  fontWeight: "500",
-                  color: "#374151",
+                  fontSize: "1.5rem",
+                  fontWeight: "600",
+                  marginBottom: "1.5rem",
+                  color: "#1a1a1a",
                 }}
               >
-                Amount (ETH)
-              </label>
-              <input
-                id="amount"
-                type="text"
-                placeholder="0.01"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+                Send Tip
+              </h2>
+
+              <div style={{ marginBottom: "1rem" }}>
+                <label
+                  style={{
+                    display: "block",
+                    marginBottom: "0.5rem",
+                    fontSize: "0.875rem",
+                    fontWeight: "500",
+                    color: "#374151",
+                  }}
+                >
+                  Owner address
+                </label>
+                <input
+                  id="owner"
+                  type="text"
+                  placeholder="0x..."
+                  value={owner}
+                  onChange={(e) => setOwner(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "0.75rem",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "6px",
+                    fontSize: "0.875rem",
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: "1.5rem" }}>
+                <label
+                  style={{
+                    display: "block",
+                    marginBottom: "0.5rem",
+                    fontSize: "0.875rem",
+                    fontWeight: "500",
+                    color: "#374151",
+                  }}
+                >
+                  Amount (ETH)
+                </label>
+                <input
+                  id="amount"
+                  type="text"
+                  placeholder="0.01"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "0.75rem",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "6px",
+                    fontSize: "0.875rem",
+                  }}
+                />
+              </div>
+
+              <button
+                id="btn-send-tip"
+                onClick={onSendTip}
                 style={{
                   width: "100%",
-                  padding: "0.75rem",
-                  border: "1px solid #d1d5db",
-                  borderRadius: "6px",
-                  fontSize: "0.875rem",
+                  padding: "1rem",
+                  backgroundColor: "#1a1a1a",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  fontSize: "1rem",
+                  fontWeight: "600",
                 }}
-              />
+              >
+                Send Tip
+              </button>
             </div>
-
-            <button
-              id="btn-send-tip"
-              onClick={onSendTip}
-              style={{
-                width: "100%",
-                padding: "1rem",
-                backgroundColor: "#1a1a1a",
-                color: "white",
-                border: "none",
-                borderRadius: "8px",
-                cursor: "pointer",
-                fontSize: "1rem",
-                fontWeight: "600",
-              }}
-            >
-              Send Tip
-            </button>
           </div>
         </div>
       </div>

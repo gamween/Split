@@ -111,11 +111,29 @@ function Toast({ message, onClose }: { message: string; onClose: () => void }) {
   )
 }
 
+const grayButtonStyle = {
+  padding: "0.5rem 1rem",
+  backgroundColor: "#6b7280",
+  color: "white",
+  border: "none",
+  borderRadius: "6px",
+  cursor: "pointer",
+  fontSize: "0.875rem",
+  fontWeight: "500",
+}
+
+const grayButtonDisabledStyle = {
+  ...grayButtonStyle,
+  backgroundColor: "#d1d5db",
+  cursor: "not-allowed",
+}
+
 export default function ReceiverPage() {
   const [rowsRecv, setRowsRecv] = useState<{ addr: string; bps: string }[]>([{ addr: "", bps: "" }])
   const [forwarder, setForwarder] = useState<string>("")
   const [paylink, setPaylink] = useState<string>("")
   const [toast, setToast] = useState<string>("")
+  const [step1Done, setStep1Done] = useState<boolean>(false)
 
   function addRowRecv(): void {
     setRowsRecv([...rowsRecv, { addr: "", bps: "" }])
@@ -138,6 +156,7 @@ export default function ReceiverPage() {
   }
 
   function onSaveSplit(): void {
+    setStep1Done(true)
     setToast("Split saved")
   }
 
@@ -282,16 +301,7 @@ export default function ReceiverPage() {
               <button
                 id="btn-add-row-recv"
                 onClick={addRowRecv}
-                style={{
-                  padding: "0.5rem 1rem",
-                  backgroundColor: "#10b981",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontSize: "0.875rem",
-                  fontWeight: "500",
-                }}
+                style={grayButtonStyle}
               >
                 Add Row
               </button>
@@ -299,16 +309,7 @@ export default function ReceiverPage() {
                 id="btn-remove-row-recv"
                 onClick={removeRowRecv}
                 disabled={rowsRecv.length === 1}
-                style={{
-                  padding: "0.5rem 1rem",
-                  backgroundColor: rowsRecv.length === 1 ? "#d1d5db" : "#ef4444",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: rowsRecv.length === 1 ? "not-allowed" : "pointer",
-                  fontSize: "0.875rem",
-                  fontWeight: "500",
-                }}
+                style={rowsRecv.length === 1 ? grayButtonDisabledStyle : grayButtonStyle}
               >
                 Remove Row
               </button>
@@ -339,117 +340,134 @@ export default function ReceiverPage() {
               borderRadius: "12px",
               padding: "2rem",
               border: "1px solid #e5e7eb",
+              position: "relative",
             }}
           >
-            <h2
-              style={{
-                fontSize: "1.5rem",
-                fontWeight: "600",
-                marginBottom: "1.5rem",
-                color: "#1a1a1a",
-              }}
-            >
-              Your payment target
-            </h2>
-
-            <div style={{ display: "flex", gap: "1rem", marginBottom: "1.5rem", flexWrap: "wrap" }}>
-              <button
-                id="btn-get-forwarder"
-                onClick={onGetForwarder}
+            {!step1Done && (
+              <div
                 style={{
-                  flex: "1",
-                  minWidth: "150px",
-                  padding: "0.75rem 1.5rem",
-                  backgroundColor: "#1a1a1a",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  fontSize: "0.875rem",
+                  position: "absolute",
+                  top: "1rem",
+                  right: "1rem",
+                  fontSize: "0.75rem",
+                  color: "#9ca3af",
                   fontWeight: "500",
                 }}
               >
-                Get unique address
-              </button>
-              <button
-                id="btn-copy-link"
-                onClick={onCopyLink}
+                Step 1 required
+              </div>
+            )}
+            <div style={{ pointerEvents: step1Done ? "auto" : "none", opacity: step1Done ? 1 : 0.5 }}>
+              <h2
                 style={{
-                  flex: "1",
-                  minWidth: "150px",
-                  padding: "0.75rem 1.5rem",
-                  backgroundColor: "white",
+                  fontSize: "1.5rem",
+                  fontWeight: "600",
+                  marginBottom: "1.5rem",
                   color: "#1a1a1a",
-                  border: "2px solid #1a1a1a",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  fontSize: "0.875rem",
-                  fontWeight: "500",
                 }}
               >
-                Copy payment link
-              </button>
+                Your payment target
+              </h2>
+
+              <div style={{ display: "flex", gap: "1rem", marginBottom: "1.5rem", flexWrap: "wrap" }}>
+                <button
+                  id="btn-get-forwarder"
+                  onClick={onGetForwarder}
+                  style={{
+                    flex: "1",
+                    minWidth: "150px",
+                    padding: "0.75rem 1.5rem",
+                    backgroundColor: "#1a1a1a",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "8px",
+                    cursor: "pointer",
+                    fontSize: "0.875rem",
+                    fontWeight: "500",
+                  }}
+                >
+                  Get unique address
+                </button>
+                <button
+                  id="btn-copy-link"
+                  onClick={onCopyLink}
+                  style={{
+                    flex: "1",
+                    minWidth: "150px",
+                    padding: "0.75rem 1.5rem",
+                    backgroundColor: "white",
+                    color: "#1a1a1a",
+                    border: "2px solid #1a1a1a",
+                    borderRadius: "8px",
+                    cursor: "pointer",
+                    fontSize: "0.875rem",
+                    fontWeight: "500",
+                  }}
+                >
+                  Copy payment link
+                </button>
+              </div>
+
+              {forwarder && (
+                <div style={{ marginBottom: "1rem" }}>
+                  <label
+                    style={{
+                      display: "block",
+                      marginBottom: "0.5rem",
+                      fontSize: "0.875rem",
+                      fontWeight: "500",
+                      color: "#374151",
+                    }}
+                  >
+                    Unique address
+                  </label>
+                  <input
+                    id="forwarder"
+                    type="text"
+                    value={forwarder}
+                    readOnly
+                    style={{
+                      width: "100%",
+                      padding: "0.75rem",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "6px",
+                      fontSize: "0.875rem",
+                      backgroundColor: "#f9fafb",
+                    }}
+                  />
+                </div>
+              )}
+
+              {paylink && (
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      marginBottom: "0.5rem",
+                      fontSize: "0.875rem",
+                      fontWeight: "500",
+                      color: "#374151",
+                    }}
+                  >
+                    Payment link
+                  </label>
+                  <input
+                    id="paylink"
+                    type="text"
+                    value={paylink}
+                    readOnly
+                    style={{
+                      width: "100%",
+                      padding: "0.75rem",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "6px",
+                      fontSize: "0.875rem",
+                      backgroundColor: "#f9fafb",
+                    }}
+                  />
+                </div>
+              )}
             </div>
-
-            {forwarder && (
-              <div style={{ marginBottom: "1rem" }}>
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "0.5rem",
-                    fontSize: "0.875rem",
-                    fontWeight: "500",
-                    color: "#374151",
-                  }}
-                >
-                  Unique address
-                </label>
-                <input
-                  id="forwarder"
-                  type="text"
-                  value={forwarder}
-                  readOnly
-                  style={{
-                    width: "100%",
-                    padding: "0.75rem",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "6px",
-                    fontSize: "0.875rem",
-                    backgroundColor: "#f9fafb",
-                  }}
-                />
-              </div>
-            )}
-
-            {paylink && (
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "0.5rem",
-                    fontSize: "0.875rem",
-                    fontWeight: "500",
-                    color: "#374151",
-                  }}
-                >
-                  Payment link
-                </label>
-                <input
-                  id="paylink"
-                  type="text"
-                  value={paylink}
-                  readOnly
-                  style={{
-                    width: "100%",
-                    padding: "0.75rem",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "6px",
-                    fontSize: "0.875rem",
-                    backgroundColor: "#f9fafb",
-                  }}
-                />
-              </div>
-            )}
           </div>
         </div>
       </div>
