@@ -3,82 +3,152 @@
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 
+const PARTICLE_COUNT = 120
+const SPEED = 1.2
+
 function InteractiveBackground() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const particlesRef = useRef<Array<{ x: number; y: number; vx: number; vy: number; baseX: number; baseY: number }>>([])
+  const mouseRef = useRef({ x: 0, y: 0 })
+  const animationFrameRef = useRef<number | undefined>(undefined)
 
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
 
-    const ctx = canvas.getContext("2d")
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    if (prefersReducedMotion) return
+
+    const ctx = canvas.getContext("2d", { alpha: false })
     if (!ctx) return
 
-    canvas.width = window.innerWidth
-    canvas.height = window.innerHeight
+    const resize = () => {
+      canvas.width = window.innerWidth
+      canvas.height = window.innerHeight
+    }
+    resize()
 
-    let mouseX = canvas.width / 2
-    let mouseY = canvas.height / 2
-
-    const particles: Array<{ x: number; y: number; vx: number; vy: number }> = []
-    for (let i = 0; i < 50; i++) {
-      particles.push({
-        x: Math.random() * canvas.width,
-        y: Math.random() * canvas.height,
-        vx: (Math.random() - 0.5) * 0.5,
-        vy: (Math.random() - 0.5) * 0.5,
-      })
+    if (particlesRef.current.length === 0) {
+      for (let i = 0; i < PARTICLE_COUNT; i++) {
+        const x = Math.random() * canvas.width
+        const y = Math.random() * canvas.height
+        particlesRef.current.push({
+          x,
+          y,
+          baseX: x,
+          baseY: y,
+          vx: (Math.random() - 0.5) * SPEED,
+          vy: (Math.random() - 0.5) * SPEED,
+        })
+      }
     }
 
+    const particles = particlesRef.current
+
     const handleMouseMove = (e: MouseEvent) => {
-      mouseX = e.clientX
-      mouseY = e.clientY
+      mouseRef.current.x = e.clientX
+      mouseRef.current.y = e.clientY
     }
 
     const handleResize = () => {
-      canvas.width = window.innerWidth
-      canvas.height = window.innerHeight
+      resize()
+      particles.forEach((p) => {
+        p.baseX = Math.random() * canvas.width
+        p.baseY = Math.random() * canvas.height
+        p.x = p.baseX
+        p.y = p.baseY
+      })
     }
 
     window.addEventListener("mousemove", handleMouseMove)
     window.addEventListener("resize", handleResize)
 
-    const animate = () => {
-      ctx.fillStyle = "rgba(250, 250, 250, 0.1)"
+    let lastTime = performance.now()
+    const animate = (currentTime: number) => {
+      const deltaTime = Math.min((currentTime - lastTime) / 16, 2)
+      lastTime = currentTime
+
+      ctx.fillStyle = "#fafafa"
       ctx.fillRect(0, 0, canvas.width, canvas.height)
 
-      particles.forEach((p) => {
+      const mouseX = mouseRef.current.x
+      const mouseY = mouseRef.current.y
+
+      for (let i = 0; i < particles.length; i++) {
+        const p = particles[i]
+
         const dx = mouseX - p.x
         const dy = mouseY - p.y
-        const dist = Math.sqrt(dx * dx + dy * dy)
+        const distSq = dx * dx + dy * dy
+        const dist = Math.sqrt(distSq)
 
-        if (dist < 200) {
-          p.vx += dx * 0.00005
-          p.vy += dy * 0.00005
+        if (dist < 250 && dist > 0) {
+          const force = (250 - dist) / 250
+          p.vx += (dx / dist) * force * 0.15 * deltaTime
+          p.vy += (dy / dist) * force * 0.15 * deltaTime
         }
 
-        p.x += p.vx
-        p.y += p.vy
+        const returnX = p.baseX - p.x
+        const returnY = p.baseY - p.y
+        p.vx += returnX * 0.002 * deltaTime
+        p.vy += returnY * 0.002 * deltaTime
 
-        p.vx *= 0.99
-        p.vy *= 0.99
+        p.vx *= 0.95
+        p.vy *= 0.95
 
-        if (p.x < 0 || p.x > canvas.width) p.vx *= -1
-        if (p.y < 0 || p.y > canvas.height) p.vy *= -1
+        p.x += p.vx * deltaTime
+        p.y += p.vy * deltaTime
+
+        if (p.x < 0) {
+          p.x = 0
+          p.vx *= -0.5
+        }
+        if (p.x > canvas.width) {
+          p.x = canvas.width
+          p.vx *= -0.5
+        }
+        if (p.y < 0) {
+          p.y = 0
+          p.vy *= -0.5
+        }
+        if (p.y > canvas.height) {
+          p.y = canvas.height
+          p.vy *= -0.5
+        }
 
         ctx.beginPath()
-        ctx.arc(p.x, p.y, 2, 0, Math.PI * 2)
-        ctx.fillStyle = "rgba(100, 100, 100, 0.2)"
+        ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2)
+        ctx.fillStyle = "rgba(100, 100, 100, 0.25)"
         ctx.fill()
-      })
 
-      requestAnimationFrame(animate)
+        for (let j = i + 1; j < particles.length; j++) {
+          const p2 = particles[j]
+          const dx2 = p2.x - p.x
+          const dy2 = p2.y - p.y
+          const distSq2 = dx2 * dx2 + dy2 * dy2
+
+          if (distSq2 < 10000) {
+            ctx.beginPath()
+            ctx.moveTo(p.x, p.y)
+            ctx.lineTo(p2.x, p2.y)
+            ctx.strokeStyle = `rgba(100, 100, 100, ${0.08 * (1 - Math.sqrt(distSq2) / 100)})`
+            ctx.lineWidth = 0.5
+            ctx.stroke()
+          }
+        }
+      }
+
+      animationFrameRef.current = requestAnimationFrame(animate)
     }
 
-    animate()
+    animationFrameRef.current = requestAnimationFrame(animate)
 
     return () => {
       window.removeEventListener("mousemove", handleMouseMove)
       window.removeEventListener("resize", handleResize)
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current)
+      }
     }
   }, [])
 
@@ -95,15 +165,16 @@ function Toast({ message, onClose }: { message: string; onClose: () => void }) {
     <div
       style={{
         position: "fixed",
-        top: "20px",
-        right: "20px",
-        backgroundColor: "#1a1a1a",
-        color: "white",
-        padding: "1rem 1.5rem",
+        top: "24px",
+        right: "24px",
+        backgroundColor: "#262626",
+        color: "#fafafa",
+        padding: "0.875rem 1.25rem",
         borderRadius: "8px",
-        boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+        boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
         zIndex: 1000,
-        animation: "slideIn 0.3s ease-out",
+        fontSize: "0.875rem",
+        fontWeight: "500",
       }}
     >
       {message}
@@ -113,18 +184,19 @@ function Toast({ message, onClose }: { message: string; onClose: () => void }) {
 
 const grayButtonStyle = {
   padding: "0.5rem 1rem",
-  backgroundColor: "#6b7280",
+  backgroundColor: "#737373",
   color: "white",
   border: "none",
   borderRadius: "6px",
   cursor: "pointer",
   fontSize: "0.875rem",
   fontWeight: "500",
+  transition: "background-color 0.15s ease",
 }
 
 const grayButtonDisabledStyle = {
   ...grayButtonStyle,
-  backgroundColor: "#d1d5db",
+  backgroundColor: "#d4d4d4",
   cursor: "not-allowed",
 }
 
@@ -171,44 +243,51 @@ export default function SenderPage() {
       <div
         style={{
           minHeight: "100vh",
-          padding: "40px 20px",
+          padding: "32px 24px 64px",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
         }}
       >
-        <div style={{ maxWidth: "800px", width: "100%" }}>
-          <Link
-            href="/"
-            style={{
-              display: "inline-block",
-              marginBottom: "1.5rem",
-              color: "#666",
-              textDecoration: "none",
-              fontSize: "0.875rem",
-            }}
-          >
-            ← Home
-          </Link>
-
-          <h1
-            style={{
-              fontSize: "2.5rem",
-              fontWeight: "bold",
-              marginBottom: "2rem",
-              color: "#1a1a1a",
-            }}
-          >
-            Spl!t — Sender
-          </h1>
+        <div style={{ maxWidth: "720px", width: "100%" }}>
+          <div style={{ marginBottom: "32px" }}>
+            <Link
+              href="/"
+              style={{
+                display: "inline-block",
+                marginBottom: "12px",
+                color: "#737373",
+                textDecoration: "none",
+                fontSize: "0.8125rem",
+                fontWeight: "500",
+                transition: "color 0.15s ease",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = "#404040")}
+              onMouseLeave={(e) => (e.currentTarget.style.color = "#737373")}
+            >
+              ← Home
+            </Link>
+            <h1
+              style={{
+                fontSize: "1.75rem",
+                fontWeight: "600",
+                color: "#171717",
+                margin: 0,
+                letterSpacing: "-0.02em",
+              }}
+            >
+              Sender
+            </h1>
+          </div>
 
           <div
             style={{
               backgroundColor: "white",
               borderRadius: "12px",
-              padding: "2rem",
-              marginBottom: "2rem",
-              border: "1px solid #e5e7eb",
+              padding: "28px",
+              marginBottom: "24px",
+              border: "1px solid #e5e5e5",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
             }}
           >
             <div
@@ -216,37 +295,43 @@ export default function SenderPage() {
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
-                marginBottom: "1.5rem",
+                marginBottom: "24px",
+                paddingBottom: "20px",
+                borderBottom: "1px solid #f5f5f5",
               }}
             >
-              <h2 style={{ fontSize: "1.5rem", fontWeight: "600", color: "#1a1a1a" }}>Configure my split</h2>
+              <h2 style={{ fontSize: "1.125rem", fontWeight: "600", color: "#171717", margin: 0 }}>
+                Configure my split
+              </h2>
               <button
                 id="btn-even-split"
                 onClick={onEvenSplit}
                 style={{
                   padding: "0.5rem 1rem",
-                  backgroundColor: "#1a1a1a",
+                  backgroundColor: "#262626",
                   color: "white",
                   border: "none",
                   borderRadius: "6px",
                   cursor: "pointer",
-                  fontSize: "0.875rem",
+                  fontSize: "0.8125rem",
                   fontWeight: "500",
+                  transition: "background-color 0.15s ease",
                 }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#404040")}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#262626")}
               >
                 Even Split
               </button>
             </div>
 
-            <div style={{ marginBottom: "1rem" }}>
+            <div style={{ marginBottom: "20px" }}>
               {rows.map((row, index) => (
                 <div
                   key={index}
                   style={{
                     display: "flex",
-                    gap: "1rem",
-                    marginBottom: "0.75rem",
-                    flexWrap: "wrap",
+                    gap: "12px",
+                    marginBottom: "12px",
                   }}
                 >
                   <input
@@ -261,11 +346,20 @@ export default function SenderPage() {
                     }}
                     style={{
                       flex: "2",
-                      minWidth: "200px",
-                      padding: "0.75rem",
-                      border: "1px solid #d1d5db",
+                      padding: "0.625rem 0.875rem",
+                      border: "1px solid #d4d4d4",
                       borderRadius: "6px",
                       fontSize: "0.875rem",
+                      outline: "none",
+                      transition: "border-color 0.15s ease, box-shadow 0.15s ease",
+                    }}
+                    onFocus={(e) => {
+                      e.currentTarget.style.borderColor = "#a3a3a3"
+                      e.currentTarget.style.boxShadow = "0 0 0 3px rgba(0,120,255,0.08)"
+                    }}
+                    onBlur={(e) => {
+                      e.currentTarget.style.borderColor = "#d4d4d4"
+                      e.currentTarget.style.boxShadow = "none"
                     }}
                   />
                   <input
@@ -281,21 +375,33 @@ export default function SenderPage() {
                     style={{
                       flex: "1",
                       minWidth: "100px",
-                      padding: "0.75rem",
-                      border: "1px solid #d1d5db",
+                      padding: "0.625rem 0.875rem",
+                      border: "1px solid #d4d4d4",
                       borderRadius: "6px",
                       fontSize: "0.875rem",
+                      outline: "none",
+                      transition: "border-color 0.15s ease, box-shadow 0.15s ease",
+                    }}
+                    onFocus={(e) => {
+                      e.currentTarget.style.borderColor = "#a3a3a3"
+                      e.currentTarget.style.boxShadow = "0 0 0 3px rgba(0,120,255,0.08)"
+                    }}
+                    onBlur={(e) => {
+                      e.currentTarget.style.borderColor = "#d4d4d4"
+                      e.currentTarget.style.boxShadow = "none"
                     }}
                   />
                 </div>
               ))}
             </div>
 
-            <div style={{ display: "flex", gap: "1rem", marginBottom: "1.5rem" }}>
+            <div style={{ display: "flex", gap: "10px", marginBottom: "24px" }}>
               <button
                 id="btn-add-row"
                 onClick={addRow}
                 style={grayButtonStyle}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#525252")}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#737373")}
               >
                 Add Row
               </button>
@@ -304,6 +410,12 @@ export default function SenderPage() {
                 onClick={removeRow}
                 disabled={rows.length === 1}
                 style={rows.length === 1 ? grayButtonDisabledStyle : grayButtonStyle}
+                onMouseEnter={(e) => {
+                  if (rows.length > 1) e.currentTarget.style.backgroundColor = "#525252"
+                }}
+                onMouseLeave={(e) => {
+                  if (rows.length > 1) e.currentTarget.style.backgroundColor = "#737373"
+                }}
               >
                 Remove Row
               </button>
@@ -314,15 +426,18 @@ export default function SenderPage() {
               onClick={onSetSplit}
               style={{
                 width: "100%",
-                padding: "1rem",
-                backgroundColor: "#1a1a1a",
+                padding: "0.875rem",
+                backgroundColor: "#262626",
                 color: "white",
                 border: "none",
                 borderRadius: "8px",
                 cursor: "pointer",
-                fontSize: "1rem",
+                fontSize: "0.9375rem",
                 fontWeight: "600",
+                transition: "background-color 0.15s ease",
               }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#404040")}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#262626")}
             >
               Set Split
             </button>
@@ -332,8 +447,9 @@ export default function SenderPage() {
             style={{
               backgroundColor: "white",
               borderRadius: "12px",
-              padding: "2rem",
-              border: "1px solid #e5e7eb",
+              padding: "28px",
+              border: "1px solid #e5e5e5",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
               position: "relative",
             }}
           >
@@ -341,11 +457,13 @@ export default function SenderPage() {
               <div
                 style={{
                   position: "absolute",
-                  top: "1rem",
-                  right: "1rem",
-                  fontSize: "0.75rem",
-                  color: "#9ca3af",
-                  fontWeight: "500",
+                  top: "16px",
+                  right: "16px",
+                  fontSize: "0.6875rem",
+                  color: "#a3a3a3",
+                  fontWeight: "600",
+                  letterSpacing: "0.03em",
+                  textTransform: "uppercase",
                 }}
               >
                 Step 1 required
@@ -354,23 +472,26 @@ export default function SenderPage() {
             <div style={{ pointerEvents: step1Done ? "auto" : "none", opacity: step1Done ? 1 : 0.5 }}>
               <h2
                 style={{
-                  fontSize: "1.5rem",
+                  fontSize: "1.125rem",
                   fontWeight: "600",
-                  marginBottom: "1.5rem",
-                  color: "#1a1a1a",
+                  paddingBottom: "20px",
+                  borderBottom: "1px solid #f5f5f5",
+                  color: "#171717",
+                  margin: 0,
+                  marginBottom: "24px",
                 }}
               >
                 Send Tip
               </h2>
 
-              <div style={{ marginBottom: "1rem" }}>
+              <div style={{ marginBottom: "20px" }}>
                 <label
                   style={{
                     display: "block",
-                    marginBottom: "0.5rem",
-                    fontSize: "0.875rem",
-                    fontWeight: "500",
-                    color: "#374151",
+                    marginBottom: "8px",
+                    fontSize: "0.8125rem",
+                    fontWeight: "600",
+                    color: "#404040",
                   }}
                 >
                   Owner address
@@ -383,22 +504,32 @@ export default function SenderPage() {
                   onChange={(e) => setOwner(e.target.value)}
                   style={{
                     width: "100%",
-                    padding: "0.75rem",
-                    border: "1px solid #d1d5db",
+                    padding: "0.625rem 0.875rem",
+                    border: "1px solid #d4d4d4",
                     borderRadius: "6px",
                     fontSize: "0.875rem",
+                    outline: "none",
+                    transition: "border-color 0.15s ease, box-shadow 0.15s ease",
+                  }}
+                  onFocus={(e) => {
+                    e.currentTarget.style.borderColor = "#a3a3a3"
+                    e.currentTarget.style.boxShadow = "0 0 0 3px rgba(0,120,255,0.08)"
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.borderColor = "#d4d4d4"
+                    e.currentTarget.style.boxShadow = "none"
                   }}
                 />
               </div>
 
-              <div style={{ marginBottom: "1.5rem" }}>
+              <div style={{ marginBottom: "24px" }}>
                 <label
                   style={{
                     display: "block",
-                    marginBottom: "0.5rem",
-                    fontSize: "0.875rem",
-                    fontWeight: "500",
-                    color: "#374151",
+                    marginBottom: "8px",
+                    fontSize: "0.8125rem",
+                    fontWeight: "600",
+                    color: "#404040",
                   }}
                 >
                   Amount (ETH)
@@ -411,10 +542,20 @@ export default function SenderPage() {
                   onChange={(e) => setAmount(e.target.value)}
                   style={{
                     width: "100%",
-                    padding: "0.75rem",
-                    border: "1px solid #d1d5db",
+                    padding: "0.625rem 0.875rem",
+                    border: "1px solid #d4d4d4",
                     borderRadius: "6px",
                     fontSize: "0.875rem",
+                    outline: "none",
+                    transition: "border-color 0.15s ease, box-shadow 0.15s ease",
+                  }}
+                  onFocus={(e) => {
+                    e.currentTarget.style.borderColor = "#a3a3a3"
+                    e.currentTarget.style.boxShadow = "0 0 0 3px rgba(0,120,255,0.08)"
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.borderColor = "#d4d4d4"
+                    e.currentTarget.style.boxShadow = "none"
                   }}
                 />
               </div>
@@ -424,15 +565,18 @@ export default function SenderPage() {
                 onClick={onSendTip}
                 style={{
                   width: "100%",
-                  padding: "1rem",
-                  backgroundColor: "#1a1a1a",
+                  padding: "0.875rem",
+                  backgroundColor: "#262626",
                   color: "white",
                   border: "none",
                   borderRadius: "8px",
                   cursor: "pointer",
-                  fontSize: "1rem",
+                  fontSize: "0.9375rem",
                   fontWeight: "600",
+                  transition: "background-color 0.15s ease",
                 }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#404040")}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#262626")}
               >
                 Send Tip
               </button>
