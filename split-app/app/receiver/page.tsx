@@ -233,13 +233,26 @@ export default function ReceiverPage() {
   }
 
   function onGetForwarder(): void {
-    setForwarder("0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb")
+    const address = "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+    setForwarder(address)
+    setPaylink(`/sender?owner=${address}`)
     setToast("Address created")
   }
 
-  function onCopyLink(): void {
-    setPaylink("/sender?owner=0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb")
-    setToast("Link copied")
+  function onCopyAddress(): void {
+    if (!forwarder) return
+    navigator.clipboard.writeText(forwarder).then(
+      () => setToast("Address copied"),
+      () => setToast("Failed to copy address")
+    )
+  }
+
+  function onCopyPaymentLink(): void {
+    if (!paylink) return
+    navigator.clipboard.writeText(paylink).then(
+      () => setToast("Payment link copied"),
+      () => setToast("Failed to copy link")
+    )
   }
 
   return (
@@ -490,13 +503,12 @@ export default function ReceiverPage() {
                 Your payment target
               </h2>
 
-              <div style={{ display: "flex", gap: "12px", marginBottom: "24px", flexWrap: "wrap" }}>
+              <div style={{ marginBottom: "24px" }}>
                 <button
                   id="btn-get-forwarder"
                   onClick={onGetForwarder}
                   style={{
-                    flex: "1",
-                    minWidth: "150px",
+                    width: "100%",
                     padding: "0.75rem 1.25rem",
                     backgroundColor: "#262626",
                     color: "white",
@@ -512,93 +524,78 @@ export default function ReceiverPage() {
                 >
                   Get unique address
                 </button>
-                <button
-                  id="btn-copy-link"
-                  onClick={onCopyLink}
-                  style={{
-                    flex: "1",
-                    minWidth: "150px",
-                    padding: "0.75rem 1.25rem",
-                    backgroundColor: "white",
-                    color: "#262626",
-                    border: "2px solid #262626",
-                    borderRadius: "8px",
-                    cursor: "pointer",
-                    fontSize: "0.875rem",
-                    fontWeight: "600",
-                    transition: "background-color 0.15s ease, color 0.15s ease",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = "#f5f5f5"
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = "white"
-                  }}
-                >
-                  Copy payment link
-                </button>
               </div>
 
               {forwarder && (
-                <div style={{ marginBottom: "20px" }}>
-                  <label
-                    style={{
-                      display: "block",
-                      marginBottom: "8px",
-                      fontSize: "0.8125rem",
-                      fontWeight: "600",
-                      color: "#404040",
-                    }}
-                  >
-                    Unique address
-                  </label>
-                  <input
-                    id="forwarder"
-                    type="text"
-                    value={forwarder}
-                    readOnly
-                    style={{
-                      width: "100%",
-                      padding: "0.625rem 0.875rem",
-                      border: "1px solid #d4d4d4",
-                      borderRadius: "6px",
-                      fontSize: "0.875rem",
-                      backgroundColor: "#f9fafb",
-                      color: "#525252",
-                    }}
-                  />
-                </div>
-              )}
-
-              {paylink && (
-                <div>
-                  <label
-                    style={{
-                      display: "block",
-                      marginBottom: "8px",
-                      fontSize: "0.8125rem",
-                      fontWeight: "600",
-                      color: "#404040",
-                    }}
-                  >
-                    Payment link
-                  </label>
-                  <input
-                    id="paylink"
-                    type="text"
-                    value={paylink}
-                    readOnly
-                    style={{
-                      width: "100%",
-                      padding: "0.625rem 0.875rem",
-                      border: "1px solid #d4d4d4",
-                      borderRadius: "6px",
-                      fontSize: "0.875rem",
-                      backgroundColor: "#f9fafb",
-                      color: "#525252",
-                    }}
-                  />
-                </div>
+                <>
+                  <div style={{ marginBottom: "20px" }}>
+                    <label
+                      style={{
+                        display: "block",
+                        marginBottom: "8px",
+                        fontSize: "0.8125rem",
+                        fontWeight: "600",
+                        color: "#404040",
+                      }}
+                    >
+                      Unique address
+                    </label>
+                    <input
+                      id="forwarder"
+                      type="text"
+                      value={forwarder}
+                      readOnly
+                      style={{
+                        width: "100%",
+                        padding: "0.625rem 0.875rem",
+                        border: "1px solid #d4d4d4",
+                        borderRadius: "6px",
+                        fontSize: "0.875rem",
+                        backgroundColor: "#f9fafb",
+                        color: "#525252",
+                        marginBottom: "12px",
+                      }}
+                    />
+                    <div style={{ display: "flex", gap: "10px" }}>
+                      <button
+                        id="btn-copy-address"
+                        onClick={onCopyAddress}
+                        disabled={!forwarder}
+                        style={
+                          !forwarder
+                            ? grayButtonDisabledStyle
+                            : grayButtonStyle
+                        }
+                        onMouseEnter={(e) => {
+                          if (forwarder) e.currentTarget.style.backgroundColor = "#525252"
+                        }}
+                        onMouseLeave={(e) => {
+                          if (forwarder) e.currentTarget.style.backgroundColor = "#737373"
+                        }}
+                      >
+                        Copy address
+                      </button>
+                      <button
+                        id="btn-copy-payment-link"
+                        onClick={onCopyPaymentLink}
+                        disabled={!paylink}
+                        style={
+                          !paylink
+                            ? grayButtonDisabledStyle
+                            : grayButtonStyle
+                        }
+                        onMouseEnter={(e) => {
+                          if (paylink) e.currentTarget.style.backgroundColor = "#525252"
+                        }}
+                        onMouseLeave={(e) => {
+                          if (paylink) e.currentTarget.style.backgroundColor = "#737373"
+                        }}
+                      >
+                        Copy payment link
+                      </button>
+                    </div>
+                  </div>
+                </>
               )}
             </div>
           </div>
