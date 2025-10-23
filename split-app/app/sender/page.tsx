@@ -2,6 +2,12 @@
 
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
+import { useWriteContract, useWaitForTransactionReceipt, useAccount, useConnect, useDisconnect } from "wagmi"
+import { parseEther } from "viem"
+import { injected } from "wagmi/connectors"
+import TipSplitterABIJson from "@/src/abi/TipSplitter.json"
+
+const TipSplitterABI = TipSplitterABIJson as any
 
 const PARTICLE_COUNT = 120
 const SPEED = 1.2
@@ -202,10 +208,62 @@ const grayButtonDisabledStyle = {
 
 export default function SenderPage() {
   const [rows, setRows] = useState<{ addr: string; bps: string }[]>([{ addr: "", bps: "" }])
-  const [owner, setOwner] = useState<string>("")
   const [amount, setAmount] = useState<string>("0.01")
   const [toast, setToast] = useState<string>("")
   const [step1Done, setStep1Done] = useState<boolean>(false)
+
+  const contractAddress = process.env.NEXT_PUBLIC_CONTRACT as `0x${string}`
+
+  const { address, isConnected } = useAccount()
+  const { connect } = useConnect()
+  const { disconnect } = useDisconnect()
+
+  const { 
+    writeContract, 
+    data: setSplitHash, 
+    isPending: isSetSplitPending,
+    error: setSplitError 
+  } = useWriteContract()
+
+  const { 
+    writeContract: sendTipWrite, 
+    data: sendTipHash, 
+    isPending: isSendTipPending,
+    error: sendTipError 
+  } = useWriteContract()
+
+  const { isLoading: isSetSplitConfirming, isSuccess: isSetSplitConfirmed } = useWaitForTransactionReceipt({ 
+    hash: setSplitHash 
+  })
+
+  const { isLoading: isSendTipConfirming, isSuccess: isSendTipConfirmed } = useWaitForTransactionReceipt({ 
+    hash: sendTipHash 
+  })
+
+  useEffect(() => {
+    if (isSetSplitConfirmed && setSplitHash) {
+      setStep1Done(true)
+      setToast(`✅ Split saved on-chain! Tx: ${setSplitHash.slice(0, 10)}...${setSplitHash.slice(-8)}`)
+    }
+  }, [isSetSplitConfirmed, setSplitHash])
+
+  useEffect(() => {
+    if (isSendTipConfirmed && sendTipHash) {
+      setToast(`✅ Tip sent successfully! Tx: ${sendTipHash.slice(0, 10)}...${sendTipHash.slice(-8)}`)
+    }
+  }, [isSendTipConfirmed, sendTipHash])
+
+  useEffect(() => {
+    if (setSplitError) {
+      setToast(`❌ Error: ${setSplitError.message}`)
+    }
+  }, [setSplitError])
+
+  useEffect(() => {
+    if (sendTipError) {
+      setToast(`❌ Error: ${sendTipError.message}`)
+    }
+  }, [sendTipError])
 
   function addRow(): void {
     setRows([...rows, { addr: "", bps: "" }])
@@ -228,12 +286,54 @@ export default function SenderPage() {
   }
 
   function onSetSplit(): void {
-    setStep1Done(true)
-    setToast("Split saved")
+    const totalBps = rows.reduce((sum, row) => sum + (parseInt(row.bps) || 0), 0)
+    if (totalBps !== 10000) {
+      setToast("Total BPS must equal 10000")
+      return
+    }
+
+    const recipients = rows.map(row => ({
+      addr: row.addr as `0x${string}`,
+      shareBps: parseInt(row.bps)
+    }))
+
+    writeContract({
+      address: contractAddress,
+      abi: TipSplitterABI,
+      functionName: "setSplit",
+      args: [recipients],
+    })
   }
 
   function onSendTip(): void {
-    setToast("Tip sent")
+    if (!isConnected) {
+      setToast("Please connect your wallet first")
+      return
+    }
+
+    if (!address) {
+      setToast("Wallet address not available")
+      return
+    }
+
+    if (!amount || amount.trim() === "" || Number(amount) <= 0) {
+      setToast("Please enter a valid amount")
+      return
+    }
+
+    try {
+      const value = parseEther(amount)
+      
+      sendTipWrite({
+        address: contractAddress,
+        abi: TipSplitterABI,
+        functionName: "depositFor",
+        args: [address as `0x${string}`],
+        value: value,
+      })
+    } catch (error) {
+      setToast("Invalid amount format")
+    }
   }
 
   return (
@@ -303,25 +403,27 @@ export default function SenderPage() {
               <h2 style={{ fontSize: "1.125rem", fontWeight: "600", color: "#171717", margin: 0 }}>
                 Configure my split
               </h2>
-              <button
-                id="btn-even-split"
-                onClick={onEvenSplit}
-                style={{
-                  padding: "0.5rem 1rem",
-                  backgroundColor: "#262626",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontSize: "0.8125rem",
-                  fontWeight: "500",
-                  transition: "background-color 0.15s ease",
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#404040")}
-                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#262626")}
-              >
-                Even Split
-              </button>
+              <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                <button
+                  id="btn-even-split"
+                  onClick={onEvenSplit}
+                  style={{
+                    padding: "0.5rem 1rem",
+                    backgroundColor: "#262626",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    fontSize: "0.8125rem",
+                    fontWeight: "500",
+                    transition: "background-color 0.15s ease",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#404040")}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#262626")}
+                >
+                  Even Split
+                </button>
+              </div>
             </div>
 
             <div style={{ marginBottom: "20px" }}>
@@ -424,22 +526,31 @@ export default function SenderPage() {
             <button
               id="btn-set-split"
               onClick={onSetSplit}
+              disabled={isSetSplitPending || isSetSplitConfirming}
               style={{
                 width: "100%",
                 padding: "0.875rem",
-                backgroundColor: "#262626",
+                backgroundColor: (isSetSplitPending || isSetSplitConfirming) ? "#d4d4d4" : "#262626",
                 color: "white",
                 border: "none",
                 borderRadius: "8px",
-                cursor: "pointer",
+                cursor: (isSetSplitPending || isSetSplitConfirming) ? "not-allowed" : "pointer",
                 fontSize: "0.9375rem",
                 fontWeight: "600",
                 transition: "background-color 0.15s ease",
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#404040")}
-              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#262626")}
+              onMouseEnter={(e) => {
+                if (!isSetSplitPending && !isSetSplitConfirming) {
+                  e.currentTarget.style.backgroundColor = "#404040"
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isSetSplitPending && !isSetSplitConfirming) {
+                  e.currentTarget.style.backgroundColor = "#262626"
+                }
+              }}
             >
-              Set Split
+              {isSetSplitPending || isSetSplitConfirming ? "Setting Split..." : "Set Split"}
             </button>
           </div>
 
@@ -494,32 +605,63 @@ export default function SenderPage() {
                     color: "#404040",
                   }}
                 >
-                  Owner address
+                  Wallet
                 </label>
-                <input
-                  id="owner"
-                  type="text"
-                  placeholder="0x..."
-                  value={owner}
-                  onChange={(e) => setOwner(e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "0.625rem 0.875rem",
-                    border: "1px solid #d4d4d4",
-                    borderRadius: "6px",
-                    fontSize: "0.875rem",
-                    outline: "none",
-                    transition: "border-color 0.15s ease, box-shadow 0.15s ease",
-                  }}
-                  onFocus={(e) => {
-                    e.currentTarget.style.borderColor = "#a3a3a3"
-                    e.currentTarget.style.boxShadow = "0 0 0 3px rgba(0,120,255,0.08)"
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.borderColor = "#d4d4d4"
-                    e.currentTarget.style.boxShadow = "none"
-                  }}
-                />
+                {isConnected && address ? (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "0.625rem 0.875rem",
+                      border: "1px solid #d4d4d4",
+                      borderRadius: "6px",
+                      backgroundColor: "#fafafa",
+                    }}
+                  >
+                    <span style={{ fontSize: "0.875rem", color: "#404040" }}>
+                      {address.slice(0, 6)}...{address.slice(-4)}
+                    </span>
+                    <button
+                      onClick={() => disconnect()}
+                      style={{
+                        padding: "0.375rem 0.75rem",
+                        backgroundColor: "#ef4444",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "4px",
+                        cursor: "pointer",
+                        fontSize: "0.75rem",
+                        fontWeight: "500",
+                        transition: "background-color 0.15s ease",
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#dc2626")}
+                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#ef4444")}
+                    >
+                      Disconnect
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => connect({ connector: injected() })}
+                    style={{
+                      width: "100%",
+                      padding: "0.625rem 0.875rem",
+                      backgroundColor: "#262626",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      fontSize: "0.875rem",
+                      fontWeight: "500",
+                      transition: "background-color 0.15s ease",
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#404040")}
+                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#262626")}
+                  >
+                    Connect Wallet
+                  </button>
+                )}
               </div>
 
               <div style={{ marginBottom: "24px" }}>
@@ -563,22 +705,31 @@ export default function SenderPage() {
               <button
                 id="btn-send-tip"
                 onClick={onSendTip}
+                disabled={isSendTipPending || isSendTipConfirming || !isConnected}
                 style={{
                   width: "100%",
                   padding: "0.875rem",
-                  backgroundColor: "#262626",
+                  backgroundColor: (isSendTipPending || isSendTipConfirming || !isConnected) ? "#d4d4d4" : "#262626",
                   color: "white",
                   border: "none",
                   borderRadius: "8px",
-                  cursor: "pointer",
+                  cursor: (isSendTipPending || isSendTipConfirming || !isConnected) ? "not-allowed" : "pointer",
                   fontSize: "0.9375rem",
                   fontWeight: "600",
                   transition: "background-color 0.15s ease",
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#404040")}
-                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#262626")}
+                onMouseEnter={(e) => {
+                  if (!isSendTipPending && !isSendTipConfirming && isConnected) {
+                    e.currentTarget.style.backgroundColor = "#404040"
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isSendTipPending && !isSendTipConfirming && isConnected) {
+                    e.currentTarget.style.backgroundColor = "#262626"
+                  }
+                }}
               >
-                Send Tip
+                {isSendTipPending || isSendTipConfirming ? "Sending Tip..." : !isConnected ? "Connect Wallet First" : "Send Tip"}
               </button>
             </div>
           </div>
