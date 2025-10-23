@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
+import { useWriteContract, useReadContract, useWaitForTransactionReceipt } from "wagmi"
+import ForwarderFactoryABI from "@/src/abi/ForwarderFactory.json"
 
 const PARTICLE_COUNT = 120
 const SPEED = 1.2
@@ -206,6 +208,28 @@ export default function ReceiverPage() {
   const [paylink, setPaylink] = useState<string>("")
   const [toast, setToast] = useState<string>("")
   const [step1Done, setStep1Done] = useState<boolean>(false)
+  const [ownerAddress, setOwnerAddress] = useState<string>("")
+
+  const factoryAddress = process.env.NEXT_PUBLIC_FACTORY as `0x${string}`
+
+  const { writeContract, data: hash, isPending: isDeploying } = useWriteContract()
+  const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash })
+
+  const { data: computedForwarder } = useReadContract({
+    address: factoryAddress,
+    abi: ForwarderFactoryABI,
+    functionName: "forwarderAddress",
+    args: ownerAddress ? [ownerAddress as `0x${string}`] : undefined,
+  })
+
+  useEffect(() => {
+    if (isConfirmed && computedForwarder) {
+      const fwdAddress = computedForwarder as string
+      setForwarder(fwdAddress)
+      setPaylink(`ethereum:${fwdAddress}`)
+      setToast("Unique address created")
+    }
+  }, [isConfirmed, computedForwarder])
 
   function addRowRecv(): void {
     setRowsRecv([...rowsRecv, { addr: "", bps: "" }])
@@ -233,10 +257,21 @@ export default function ReceiverPage() {
   }
 
   function onGetForwarder(): void {
-    const address = "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
-    setForwarder(address)
-    setPaylink(`/sender?owner=${address}`)
-    setToast("Address created")
+    if (!step1Done) {
+      setToast("Please save split first")
+      return
+    }
+    if (!ownerAddress) {
+      setToast("Please enter owner address")
+      return
+    }
+    
+    writeContract({
+      address: factoryAddress,
+      abi: ForwarderFactoryABI,
+      functionName: "getOrDeploy",
+      args: [ownerAddress as `0x${string}`],
+    })
   }
 
   function onCopyAddress(): void {
@@ -467,6 +502,52 @@ export default function ReceiverPage() {
               backgroundColor: "white",
               borderRadius: "12px",
               padding: "28px",
+              marginBottom: "24px",
+              border: "1px solid #e5e5e5",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+            }}
+          >
+            <h2
+              style={{
+                fontSize: "1.125rem",
+                fontWeight: "600",
+                marginBottom: "24px",
+                color: "#171717",
+              }}
+            >
+              Owner Address
+            </h2>
+            <input
+              id="owner-address"
+              type="text"
+              placeholder="0x..."
+              value={ownerAddress}
+              onChange={(e) => setOwnerAddress(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "0.625rem 0.875rem",
+                border: "1px solid #d4d4d4",
+                borderRadius: "6px",
+                fontSize: "0.875rem",
+                outline: "none",
+                transition: "border-color 0.15s ease, box-shadow 0.15s ease",
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = "#a3a3a3"
+                e.currentTarget.style.boxShadow = "0 0 0 3px rgba(0,120,255,0.08)"
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = "#d4d4d4"
+                e.currentTarget.style.boxShadow = "none"
+              }}
+            />
+          </div>
+
+          <div
+            style={{
+              backgroundColor: "white",
+              borderRadius: "12px",
+              padding: "28px",
               border: "1px solid #e5e5e5",
               boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
               position: "relative",
@@ -507,22 +588,31 @@ export default function ReceiverPage() {
                 <button
                   id="btn-get-forwarder"
                   onClick={onGetForwarder}
+                  disabled={isDeploying || isConfirming || !step1Done || !ownerAddress}
                   style={{
                     width: "100%",
                     padding: "0.75rem 1.25rem",
-                    backgroundColor: "#262626",
+                    backgroundColor: (isDeploying || isConfirming || !step1Done || !ownerAddress) ? "#d4d4d4" : "#262626",
                     color: "white",
                     border: "none",
                     borderRadius: "8px",
-                    cursor: "pointer",
+                    cursor: (isDeploying || isConfirming || !step1Done || !ownerAddress) ? "not-allowed" : "pointer",
                     fontSize: "0.875rem",
                     fontWeight: "600",
                     transition: "background-color 0.15s ease",
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#404040")}
-                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#262626")}
+                  onMouseEnter={(e) => {
+                    if (!isDeploying && !isConfirming && step1Done && ownerAddress) {
+                      e.currentTarget.style.backgroundColor = "#404040"
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isDeploying && !isConfirming && step1Done && ownerAddress) {
+                      e.currentTarget.style.backgroundColor = "#262626"
+                    }
+                  }}
                 >
-                  Get unique address
+                  {isDeploying || isConfirming ? "Creating..." : "Get unique address"}
                 </button>
               </div>
 
