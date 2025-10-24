@@ -1,0 +1,23 @@
+<svg width="1200" height="630" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="630" fill="#000000"/>
+  
+  <!-- Logo/Icon centered top -->
+  <circle cx="600" cy="200" r="60" fill="none" stroke="#ffffff" stroke-width="3"/>
+  <line x1="600" y1="140" x2="540" y2="260" stroke="#ffffff" stroke-width="3"/>
+  <line x1="600" y1="140" x2="660" y2="260" stroke="#ffffff" stroke-width="3"/>
+  
+  <!-- Title -->
+  <text x="600" y="330" font-family="Arial, sans-serif" font-size="56" font-weight="700" fill="#ffffff" text-anchor="middle">BB25 Split</text>
+  
+  <!-- Subtitle -->
+  <text x="600" y="390" font-family="Arial, sans-serif" font-size="24" fill="#a3a3a3" text-anchor="middle">Decentralized Tip Splitting on Base Sepolia</text>
+  
+  <!-- Call to action -->
+  <text x="600" y="480" font-family="Arial, sans-serif" font-size="20" fill="#d4d4d4" text-anchor="middle">Choose your role to get started</text>
+  
+  <!-- Visual separator -->
+  <rect x="400" y="520" width="400" height="2" fill="#404040" opacity="0.5"/>
+  
+  <!-- Footer text -->
+  <text x="600" y="570" font-family="Arial, sans-serif" font-size="16" fill="#737373" text-anchor="middle">Tap a button below to launch the app</text>
+</svg>

@@ -1,0 +1,33 @@
+{
+  "accountAssociation": {
+    "header": "",
+    "payload": "",
+    "signature": ""
+  },
+  "baseBuilder": {
+    "allowedAddresses": []
+  },
+  "miniapp": {
+    "version": "1",
+    "name": "BB25 Split",
+    "homeUrl": "https://your-domain.vercel.app",
+    "iconUrl": "https://your-domain.vercel.app/icon.png",
+    "splashImageUrl": "https://your-domain.vercel.app/splash.png",
+    "splashBackgroundColor": "#000000",
+    "webhookUrl": "https://your-domain.vercel.app/api/webhook",
+    "subtitle": "Split tips instantly",
+    "description": "A decentralized tip splitting app on Base Sepolia. Configure your split, send tips, and distribute ETH automatically to multiple recipients.",
+    "screenshotUrls": [
+      "https://your-domain.vercel.app/screenshot-sender.png",
+      "https://your-domain.vercel.app/screenshot-receiver.png"
+    ],
+    "primaryCategory": "finance",
+    "tags": ["crypto", "payments", "tips", "base", "ethereum"],
+    "heroImageUrl": "https://your-domain.vercel.app/hero.png",
+    "tagline": "Split tips on Base",
+    "ogTitle": "BB25 Split - Decentralized Tip Splitting",
+    "ogDescription": "Split tips instantly on Base Sepolia. Configure recipients and distribute ETH automatically.",
+    "ogImageUrl": "https://your-domain.vercel.app/og.png",
+    "noindex": true
+  }
+}

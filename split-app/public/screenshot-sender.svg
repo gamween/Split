@@ -1,0 +1,19 @@
+<svg width="1200" height="630" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="630" fill="#fafafa"/>
+  <rect x="50" y="50" width="1100" height="530" rx="12" fill="#ffffff" stroke="#e5e5e5" stroke-width="2"/>
+  <text x="100" y="120" font-family="Arial, sans-serif" font-size="32" font-weight="600" fill="#171717">BB25 Split</text>
+  <text x="100" y="170" font-family="Arial, sans-serif" font-size="20" fill="#737373">Configure your split recipients</text>
+  
+  <rect x="100" y="220" width="1000" height="60" rx="6" fill="#f5f5f5" stroke="#d4d4d4" stroke-width="1"/>
+  <text x="120" y="255" font-family="Arial, sans-serif" font-size="16" fill="#404040">0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb...</text>
+  <text x="950" y="255" font-family="Arial, sans-serif" font-size="16" fill="#404040">5000 bps</text>
+  
+  <rect x="100" y="300" width="1000" height="60" rx="6" fill="#f5f5f5" stroke="#d4d4d4" stroke-width="1"/>
+  <text x="120" y="335" font-family="Arial, sans-serif" font-size="16" fill="#404040">0x8e23Ee67d1332aD560396262C48ffbB273f5c...</text>
+  <text x="950" y="335" font-family="Arial, sans-serif" font-size="16" fill="#404040">5000 bps</text>
+  
+  <rect x="100" y="400" width="1000" height="60" rx="8" fill="#262626"/>
+  <text x="600" y="435" font-family="Arial, sans-serif" font-size="18" font-weight="600" fill="#ffffff" text-anchor="middle">Save Split</text>
+  
+  <text x="100" y="530" font-family="Arial, sans-serif" font-size="14" fill="#a3a3a3">Total: 10000/10000 bps</text>
+</svg>

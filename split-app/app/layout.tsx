@@ -8,8 +8,27 @@ const geist = Geist({ subsets: ["latin"] });
 const geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'Spl!t - Split payments on Base',
-  description: 'Split tip payments effortlessly on Base',
+  title: 'BB25 Split - Decentralized Tip Splitting',
+  description: 'Split tips instantly on Base Sepolia. Configure recipients and distribute ETH automatically.',
+  openGraph: {
+    title: 'BB25 Split - Decentralized Tip Splitting',
+    description: 'Split tips instantly on Base Sepolia. Configure recipients and distribute ETH automatically.',
+    images: ['/og.svg'],
+  },
+  other: {
+    'fc:miniapp': JSON.stringify({
+      version: 'next',
+      imageUrl: 'https://your-domain.vercel.app/embed-image.svg',
+      button: {
+        title: 'Launch BB25 Split',
+        action: {
+          type: 'launch_miniapp',
+          name: 'BB25 Split',
+          url: 'https://your-domain.vercel.app'
+        }
+      }
+    })
+  }
 }
 
 export default function RootLayout({
