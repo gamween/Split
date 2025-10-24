@@ -2,8 +2,11 @@
 
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
-import { useWriteContract, useWaitForTransactionReceipt, useAccount, useConnect, useDisconnect } from "wagmi"
+import { useAccount, useConnect, useDisconnect, useChainId, useSwitchChain } from "wagmi"
+import { useConfig } from "wagmi"
+import { writeContract, waitForTransactionReceipt } from "@wagmi/core"
 import { parseEther } from "viem"
+import { baseSepolia } from "viem/chains"
 import { injected } from "wagmi/connectors"
 import TipSplitterABIJson from "@/src/abi/TipSplitter.json"
 
@@ -207,132 +210,148 @@ const grayButtonDisabledStyle = {
 }
 
 export default function SenderPage() {
-  const [rows, setRows] = useState<{ addr: string; bps: string }[]>([{ addr: "", bps: "" }])
-  const [amount, setAmount] = useState<string>("0.01")
+  const [rows, setRows] = useState<{ addr: string; bps: number }[]>([{ addr: "", bps: 0 }])
+  const [amountEth, setAmountEth] = useState<string>("0.01")
   const [toast, setToast] = useState<string>("")
-  const [step1Done, setStep1Done] = useState<boolean>(false)
+  const [splitSaved, setSplitSaved] = useState<boolean>(false)
+  const [isSending, setIsSending] = useState<boolean>(false)
 
-  const contractAddress = process.env.NEXT_PUBLIC_CONTRACT as `0x${string}`
-
+  const tipSplitter = process.env.NEXT_PUBLIC_TIP_SPLITTER as `0x${string}`
   const { address, isConnected } = useAccount()
-  const { connect } = useConnect()
+  const { connect, connectors, status: connectStatus } = useConnect()
   const { disconnect } = useDisconnect()
+  const config = useConfig()
+  const chainId = useChainId()
+  const { switchChain } = useSwitchChain()
 
-  const { 
-    writeContract, 
-    data: setSplitHash, 
-    isPending: isSetSplitPending,
-    error: setSplitError 
-  } = useWriteContract()
+  const isCorrectChain = chainId === baseSepolia.id
+  const totalBps = rows.reduce((acc, r) => acc + (Number.isFinite(r.bps) ? r.bps : 0), 0)
 
-  const { 
-    writeContract: sendTipWrite, 
-    data: sendTipHash, 
-    isPending: isSendTipPending,
-    error: sendTipError 
-  } = useWriteContract()
-
-  const { isLoading: isSetSplitConfirming, isSuccess: isSetSplitConfirmed } = useWaitForTransactionReceipt({ 
-    hash: setSplitHash 
-  })
-
-  const { isLoading: isSendTipConfirming, isSuccess: isSendTipConfirmed } = useWaitForTransactionReceipt({ 
-    hash: sendTipHash 
-  })
-
+  // Détection du mauvais réseau à la connexion
   useEffect(() => {
-    if (isSetSplitConfirmed && setSplitHash) {
-      setStep1Done(true)
-      setToast(`✅ Split saved on-chain! Tx: ${setSplitHash.slice(0, 10)}...${setSplitHash.slice(-8)}`)
+    if (isConnected && !isCorrectChain) {
+      setToast("Please switch your wallet to Base Sepolia to continue.")
     }
-  }, [isSetSplitConfirmed, setSplitHash])
+  }, [isConnected, isCorrectChain])
 
-  useEffect(() => {
-    if (isSendTipConfirmed && sendTipHash) {
-      setToast(`✅ Tip sent successfully! Tx: ${sendTipHash.slice(0, 10)}...${sendTipHash.slice(-8)}`)
-    }
-  }, [isSendTipConfirmed, sendTipHash])
-
-  useEffect(() => {
-    if (setSplitError) {
-      setToast(`❌ Error: ${setSplitError.message}`)
-    }
-  }, [setSplitError])
-
-  useEffect(() => {
-    if (sendTipError) {
-      setToast(`❌ Error: ${sendTipError.message}`)
-    }
-  }, [sendTipError])
+  function setRow(i: number, patch: Partial<{ addr: string; bps: number }>) {
+    setRows(prev => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))
+    setSplitSaved(false)
+  }
 
   function addRow(): void {
-    setRows([...rows, { addr: "", bps: "" }])
+    setRows(prev => [...prev, { addr: "", bps: 0 }])
+    setSplitSaved(false)
   }
 
   function removeRow(): void {
     if (rows.length === 1) return
-    setRows(rows.slice(0, -1))
+    setRows(prev => prev.slice(0, -1))
+    setSplitSaved(false)
   }
 
   function onEvenSplit(): void {
-    const bpsPerRow = Math.floor(10000 / rows.length)
-    const remainder = 10000 - bpsPerRow * rows.length
-    setRows(
-      rows.map((row, i) => ({
-        ...row,
-        bps: (i === 0 ? bpsPerRow + remainder : bpsPerRow).toString(),
-      })),
-    )
+    if (rows.length === 0) return
+    const base = Math.floor(10000 / rows.length)
+    const remainder = 10000 - base * rows.length
+    const next = rows.map((r, i) => ({ ...r, bps: base + (i < remainder ? 1 : 0) }))
+    setRows(next)
+    setSplitSaved(false)
   }
 
-  function onSetSplit(): void {
-    const totalBps = rows.reduce((sum, row) => sum + (parseInt(row.bps) || 0), 0)
-    if (totalBps !== 10000) {
-      setToast("Total BPS must equal 10000")
-      return
+  function validateRows(): string | null {
+    if (rows.length === 0) return "Add at least one recipient."
+    for (const r of rows) {
+      if (!/^0x[a-fA-F0-9]{40}$/.test(r.addr)) return "Invalid recipient address."
+      if (r.bps <= 0) return "Bps must be > 0."
     }
-
-    const recipients = rows.map(row => ({
-      addr: row.addr as `0x${string}`,
-      shareBps: parseInt(row.bps)
-    }))
-
-    writeContract({
-      address: contractAddress,
-      abi: TipSplitterABI,
-      functionName: "setSplit",
-      args: [recipients],
-    })
+    if (totalBps !== 10000) return "Total bps must be exactly 10000."
+    return null
   }
 
-  function onSendTip(): void {
-    if (!isConnected) {
-      setToast("Please connect your wallet first")
+  function onSaveSplit(): void {
+    const err = validateRows()
+    if (err) {
+      setToast(`❌ ${err}`)
       return
     }
+    setSplitSaved(true)
+    setToast("✅ Split saved locally. You can now send a tip.")
+  }
 
-    if (!address) {
-      setToast("Wallet address not available")
-      return
-    }
-
-    if (!amount || amount.trim() === "" || Number(amount) <= 0) {
-      setToast("Please enter a valid amount")
-      return
-    }
-
+  async function onSendTip(): Promise<void> {
     try {
-      const value = parseEther(amount)
+      if (!isConnected || !address) {
+        setToast("❌ Connect your wallet first.")
+        return
+      }
       
-      sendTipWrite({
-        address: contractAddress,
+      // Vérification de la chaîne
+      if (!isCorrectChain) {
+        setToast("Please switch your wallet to Base Sepolia to continue.")
+        if (switchChain) {
+          try {
+            await switchChain({ chainId: baseSepolia.id })
+            setToast("⏳ Switching to Base Sepolia...")
+            return
+          } catch (switchError) {
+            setToast("Failed to switch network. Please switch manually to Base Sepolia in your wallet.")
+            return
+          }
+        }
+        return
+      }
+      
+      if (!splitSaved) {
+        setToast("❌ Save the split first.")
+        return
+      }
+      const err = validateRows()
+      if (err) {
+        setToast(`❌ ${err}`)
+        return
+      }
+      if (!tipSplitter) {
+        setToast("❌ Contract address missing")
+        return
+      }
+
+      setIsSending(true)
+      const value = parseEther(amountEth || "0")
+
+      // 1) setSplit
+      const recipients = rows.map(r => ({
+        addr: r.addr as `0x${string}`,
+        shareBps: BigInt(r.bps),
+      }))
+
+      setToast("⏳ Setting split on-chain...")
+      const tx1 = await writeContract(config, {
         abi: TipSplitterABI,
-        functionName: "depositFor",
-        args: [address as `0x${string}`],
-        value: value,
+        address: tipSplitter,
+        functionName: "setSplit",
+        args: [recipients],
+        chainId: baseSepolia.id,
       })
-    } catch (error) {
-      setToast("Invalid amount format")
+      await waitForTransactionReceipt(config, { hash: tx1, chainId: baseSepolia.id })
+
+      // 2) deposit() with value
+      setToast("⏳ Sending tip...")
+      const tx2 = await writeContract(config, {
+        abi: TipSplitterABI,
+        address: tipSplitter,
+        functionName: "deposit",
+        args: [],
+        value,
+        chainId: baseSepolia.id,
+      })
+      await waitForTransactionReceipt(config, { hash: tx2, chainId: baseSepolia.id })
+
+      setToast(`✅ Tip sent and distributed! Tx: ${tx2.slice(0, 10)}...${tx2.slice(-8)}`)
+      setIsSending(false)
+    } catch (e: any) {
+      setIsSending(false)
+      setToast(`❌ ${e?.shortMessage || e?.message || "Transaction failed"}`)
     }
   }
 
@@ -404,6 +423,9 @@ export default function SenderPage() {
                 Configure my split
               </h2>
               <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                <span style={{ fontSize: "0.75rem", color: "#737373" }}>
+                  Total: {totalBps}/10000 bps
+                </span>
                 <button
                   id="btn-even-split"
                   onClick={onEvenSplit}
@@ -441,11 +463,7 @@ export default function SenderPage() {
                     type="text"
                     placeholder="0x..."
                     value={row.addr}
-                    onChange={(e) => {
-                      const newRows = [...rows]
-                      newRows[index].addr = e.target.value
-                      setRows(newRows)
-                    }}
+                    onChange={(e) => setRow(index, { addr: e.target.value.trim() })}
                     style={{
                       flex: "2",
                       padding: "0.625rem 0.875rem",
@@ -466,14 +484,10 @@ export default function SenderPage() {
                   />
                   <input
                     id={`bps-${index}`}
-                    type="text"
+                    type="number"
                     placeholder="bps"
                     value={row.bps}
-                    onChange={(e) => {
-                      const newRows = [...rows]
-                      newRows[index].bps = e.target.value
-                      setRows(newRows)
-                    }}
+                    onChange={(e) => setRow(index, { bps: Number(e.target.value) })}
                     style={{
                       flex: "1",
                       minWidth: "100px",
@@ -525,32 +539,32 @@ export default function SenderPage() {
 
             <button
               id="btn-set-split"
-              onClick={onSetSplit}
-              disabled={isSetSplitPending || isSetSplitConfirming}
+              onClick={onSaveSplit}
+              disabled={!!validateRows()}
               style={{
                 width: "100%",
                 padding: "0.875rem",
-                backgroundColor: (isSetSplitPending || isSetSplitConfirming) ? "#d4d4d4" : "#262626",
+                backgroundColor: validateRows() ? "#d4d4d4" : "#262626",
                 color: "white",
                 border: "none",
                 borderRadius: "8px",
-                cursor: (isSetSplitPending || isSetSplitConfirming) ? "not-allowed" : "pointer",
+                cursor: validateRows() ? "not-allowed" : "pointer",
                 fontSize: "0.9375rem",
                 fontWeight: "600",
                 transition: "background-color 0.15s ease",
               }}
               onMouseEnter={(e) => {
-                if (!isSetSplitPending && !isSetSplitConfirming) {
+                if (!validateRows()) {
                   e.currentTarget.style.backgroundColor = "#404040"
                 }
               }}
               onMouseLeave={(e) => {
-                if (!isSetSplitPending && !isSetSplitConfirming) {
+                if (!validateRows()) {
                   e.currentTarget.style.backgroundColor = "#262626"
                 }
               }}
             >
-              {isSetSplitPending || isSetSplitConfirming ? "Setting Split..." : "Set Split"}
+              {splitSaved ? "Split Saved ✓" : "Save Split"}
             </button>
           </div>
 
@@ -564,104 +578,89 @@ export default function SenderPage() {
               position: "relative",
             }}
           >
-            {!step1Done && (
+            {!splitSaved && (
               <div
                 style={{
-                  position: "absolute",
-                  top: "16px",
-                  right: "16px",
                   fontSize: "0.6875rem",
                   color: "#a3a3a3",
                   fontWeight: "600",
                   letterSpacing: "0.03em",
                   textTransform: "uppercase",
+                  textAlign: "center",
+                  marginBottom: "16px",
+                  padding: "8px",
+                  backgroundColor: "#fafafa",
+                  borderRadius: "6px",
                 }}
               >
-                Step 1 required
+                Save split first
               </div>
             )}
-            <div style={{ pointerEvents: step1Done ? "auto" : "none", opacity: step1Done ? 1 : 0.5 }}>
-              <h2
+            <div style={{ pointerEvents: splitSaved ? "auto" : "none", opacity: splitSaved ? 1 : 0.5 }}>
+              <div
                 style={{
-                  fontSize: "1.125rem",
-                  fontWeight: "600",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
                   paddingBottom: "20px",
                   borderBottom: "1px solid #f5f5f5",
-                  color: "#171717",
-                  margin: 0,
                   marginBottom: "24px",
                 }}
               >
-                Send Tip
-              </h2>
-
-              <div style={{ marginBottom: "20px" }}>
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "8px",
-                    fontSize: "0.8125rem",
-                    fontWeight: "600",
-                    color: "#404040",
-                  }}
-                >
-                  Wallet
-                </label>
-                {isConnected && address ? (
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "0.625rem 0.875rem",
-                      border: "1px solid #d4d4d4",
-                      borderRadius: "6px",
-                      backgroundColor: "#fafafa",
-                    }}
-                  >
-                    <span style={{ fontSize: "0.875rem", color: "#404040" }}>
-                      {address.slice(0, 6)}...{address.slice(-4)}
-                    </span>
+                <h2 style={{ fontSize: "1.125rem", fontWeight: "600", color: "#171717", margin: 0 }}>
+                  Send Tip
+                </h2>
+                <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                  {isConnected && address ? (
+                    <>
+                      <span style={{ fontSize: "0.75rem", color: "#737373" }}>
+                        {address.slice(0, 6)}...{address.slice(-4)}
+                      </span>
+                      <button
+                        onClick={() => disconnect()}
+                        style={{
+                          padding: "0.5rem 1rem",
+                          backgroundColor: "#ef4444",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "6px",
+                          cursor: "pointer",
+                          fontSize: "0.8125rem",
+                          fontWeight: "500",
+                          transition: "background-color 0.15s ease",
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#dc2626")}
+                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#ef4444")}
+                      >
+                        Disconnect
+                      </button>
+                    </>
+                  ) : (
                     <button
-                      onClick={() => disconnect()}
+                      onClick={() => connect({ connector: connectors[0] || injected() })}
+                      disabled={connectStatus === "pending"}
                       style={{
-                        padding: "0.375rem 0.75rem",
-                        backgroundColor: "#ef4444",
+                        padding: "0.5rem 1rem",
+                        backgroundColor: connectStatus === "pending" ? "#d4d4d4" : "#262626",
                         color: "white",
                         border: "none",
-                        borderRadius: "4px",
-                        cursor: "pointer",
-                        fontSize: "0.75rem",
+                        borderRadius: "6px",
+                        cursor: connectStatus === "pending" ? "not-allowed" : "pointer",
+                        fontSize: "0.8125rem",
                         fontWeight: "500",
                         transition: "background-color 0.15s ease",
                       }}
-                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#dc2626")}
-                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#ef4444")}
+                      onMouseEnter={(e) => {
+                        if (connectStatus !== "pending") e.currentTarget.style.backgroundColor = "#404040"
+                      }}
+                      onMouseLeave={(e) => {
+                        if (connectStatus !== "pending") e.currentTarget.style.backgroundColor = "#262626"
+                      }}
                     >
-                      Disconnect
+                      {connectStatus === "pending" ? "Connecting..." : "Connect Wallet"}
                     </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => connect({ connector: injected() })}
-                    style={{
-                      width: "100%",
-                      padding: "0.625rem 0.875rem",
-                      backgroundColor: "#262626",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "6px",
-                      cursor: "pointer",
-                      fontSize: "0.875rem",
-                      fontWeight: "500",
-                      transition: "background-color 0.15s ease",
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#404040")}
-                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#262626")}
-                  >
-                    Connect Wallet
-                  </button>
-                )}
+                  )}
+                </div>
               </div>
 
               <div style={{ marginBottom: "24px" }}>
@@ -680,8 +679,8 @@ export default function SenderPage() {
                   id="amount"
                   type="text"
                   placeholder="0.01"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
+                  value={amountEth}
+                  onChange={(e) => setAmountEth(e.target.value)}
                   style={{
                     width: "100%",
                     padding: "0.625rem 0.875rem",
@@ -705,31 +704,31 @@ export default function SenderPage() {
               <button
                 id="btn-send-tip"
                 onClick={onSendTip}
-                disabled={isSendTipPending || isSendTipConfirming || !isConnected}
+                disabled={!isConnected || !splitSaved || !amountEth || Number(amountEth) <= 0 || isSending || !isCorrectChain}
                 style={{
                   width: "100%",
                   padding: "0.875rem",
-                  backgroundColor: (isSendTipPending || isSendTipConfirming || !isConnected) ? "#d4d4d4" : "#262626",
+                  backgroundColor: (!isConnected || !splitSaved || !amountEth || Number(amountEth) <= 0 || isSending || !isCorrectChain) ? "#d4d4d4" : "#262626",
                   color: "white",
                   border: "none",
                   borderRadius: "8px",
-                  cursor: (isSendTipPending || isSendTipConfirming || !isConnected) ? "not-allowed" : "pointer",
+                  cursor: (!isConnected || !splitSaved || !amountEth || Number(amountEth) <= 0 || isSending || !isCorrectChain) ? "not-allowed" : "pointer",
                   fontSize: "0.9375rem",
                   fontWeight: "600",
                   transition: "background-color 0.15s ease",
                 }}
                 onMouseEnter={(e) => {
-                  if (!isSendTipPending && !isSendTipConfirming && isConnected) {
+                  if (isConnected && splitSaved && amountEth && Number(amountEth) > 0 && !isSending && isCorrectChain) {
                     e.currentTarget.style.backgroundColor = "#404040"
                   }
                 }}
                 onMouseLeave={(e) => {
-                  if (!isSendTipPending && !isSendTipConfirming && isConnected) {
+                  if (isConnected && splitSaved && amountEth && Number(amountEth) > 0 && !isSending && isCorrectChain) {
                     e.currentTarget.style.backgroundColor = "#262626"
                   }
                 }}
               >
-                {isSendTipPending || isSendTipConfirming ? "Sending Tip..." : !isConnected ? "Connect Wallet First" : "Send Tip"}
+                {isSending ? "Sending..." : !isCorrectChain && isConnected ? "Wrong Network" : "Send Tip"}
               </button>
             </div>
           </div>
