@@ -1,0 +1,10 @@
+{
+  "version": "1.0",
+  "name": "Split",
+  "description": "Split tips easily on Base",
+  "homepageUrl": "https://split-861xb1sik-gamween-7559s-projects.vercel.app",
+  "chains": ["base-sepolia"],
+  "ui": {
+    "css": true
+  }
+}

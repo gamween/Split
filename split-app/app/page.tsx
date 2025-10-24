@@ -128,21 +128,26 @@ export default function HomePage() {
           <div
             style={{
               display: "flex",
-              gap: "2rem",
-              justifyContent: "center",
-              flexWrap: "wrap",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: "1.5rem",
             }}
           >
             <Link
               href="/sender"
               style={{
-                padding: "1.5rem 3rem",
-                fontSize: "1.25rem",
+                width: "100%",
+                maxWidth: "28rem",
+                height: "3.5rem",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "1.125rem",
                 fontWeight: "600",
                 backgroundColor: "#1a1a1a",
                 color: "white",
                 border: "none",
-                borderRadius: "8px",
+                borderRadius: "0.75rem",
                 cursor: "pointer",
                 textDecoration: "none",
                 transition: "all 0.2s",
@@ -153,13 +158,18 @@ export default function HomePage() {
             <Link
               href="/receiver"
               style={{
-                padding: "1.5rem 3rem",
-                fontSize: "1.25rem",
+                width: "100%",
+                maxWidth: "28rem",
+                height: "3.5rem",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "1.125rem",
                 fontWeight: "600",
                 backgroundColor: "white",
                 color: "#1a1a1a",
                 border: "2px solid #1a1a1a",
-                borderRadius: "8px",
+                borderRadius: "0.75rem",
                 cursor: "pointer",
                 textDecoration: "none",
                 transition: "all 0.2s",

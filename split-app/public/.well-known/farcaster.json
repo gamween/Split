@@ -5,29 +5,30 @@
     "signature": ""
   },
   "baseBuilder": {
+    "ownerAddress": "0xbEBCD80950991E143830934B050504607515f8b9",
     "allowedAddresses": []
   },
   "miniapp": {
     "version": "1",
     "name": "BB25 Split",
-    "homeUrl": "https://your-domain.vercel.app",
-    "iconUrl": "https://your-domain.vercel.app/icon.png",
-    "splashImageUrl": "https://your-domain.vercel.app/splash.png",
+    "homeUrl": "https://split-o5w30qzk6-gamween-7559s-projects.vercel.app",
+    "iconUrl": "https://split-o5w30qzk6-gamween-7559s-projects.vercel.app/icon.svg",
+    "splashImageUrl": "https://split-o5w30qzk6-gamween-7559s-projects.vercel.app/splash.svg",
     "splashBackgroundColor": "#000000",
-    "webhookUrl": "https://your-domain.vercel.app/api/webhook",
+    "webhookUrl": "https://split-o5w30qzk6-gamween-7559s-projects.vercel.app/api/webhook",
     "subtitle": "Split tips instantly",
     "description": "A decentralized tip splitting app on Base Sepolia. Configure your split, send tips, and distribute ETH automatically to multiple recipients.",
     "screenshotUrls": [
-      "https://your-domain.vercel.app/screenshot-sender.png",
-      "https://your-domain.vercel.app/screenshot-receiver.png"
+      "https://split-o5w30qzk6-gamween-7559s-projects.vercel.app/screenshot-sender.svg",
+      "https://split-o5w30qzk6-gamween-7559s-projects.vercel.app/screenshot-receiver.svg"
     ],
     "primaryCategory": "finance",
     "tags": ["crypto", "payments", "tips", "base", "ethereum"],
-    "heroImageUrl": "https://your-domain.vercel.app/hero.png",
+    "heroImageUrl": "https://split-o5w30qzk6-gamween-7559s-projects.vercel.app/hero.svg",
     "tagline": "Split tips on Base",
     "ogTitle": "BB25 Split - Decentralized Tip Splitting",
     "ogDescription": "Split tips instantly on Base Sepolia. Configure recipients and distribute ETH automatically.",
-    "ogImageUrl": "https://your-domain.vercel.app/og.png",
+    "ogImageUrl": "https://split-o5w30qzk6-gamween-7559s-projects.vercel.app/og.svg",
     "noindex": true
   }
 }

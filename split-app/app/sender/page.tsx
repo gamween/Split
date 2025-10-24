@@ -10,6 +10,7 @@ import { baseSepolia } from "viem/chains"
 import { injected } from "wagmi/connectors"
 import TipSplitterABIJson from "@/src/abi/TipSplitter.json"
 import { getSplitKey, saveSplitToStorage, loadSplitFromStorage } from "@/lib/utils"
+import { SplitConfigurator, type Recipient } from "@/components/SplitConfigurator"
 
 const TipSplitterABI = TipSplitterABIJson as any
 
@@ -211,7 +212,7 @@ const grayButtonDisabledStyle = {
 }
 
 export default function SenderPage() {
-  const [rows, setRows] = useState<{ addr: string; bps: number }[]>([{ addr: "", bps: 0 }])
+  const [savedRecipients, setSavedRecipients] = useState<Recipient[]>([{ addr: "", bps: 0 }])
   const [amountEth, setAmountEth] = useState<string>("0.01")
   const [toast, setToast] = useState<string>("")
   const [splitSaved, setSplitSaved] = useState<boolean>(false)
@@ -226,7 +227,6 @@ export default function SenderPage() {
   const { switchChain } = useSwitchChain()
 
   const isCorrectChain = chainId === baseSepolia.id
-  const totalBps = rows.reduce((acc, r) => acc + (Number.isFinite(r.bps) ? r.bps : 0), 0)
 
   // Load split config from localStorage on wallet connection
   useEffect(() => {
@@ -234,7 +234,7 @@ export default function SenderPage() {
       const key = getSplitKey(baseSepolia.id, address)
       const savedConfig = loadSplitFromStorage(key)
       if (savedConfig && savedConfig.recipients.length > 0) {
-        setRows(savedConfig.recipients)
+        setSavedRecipients(savedConfig.recipients)
         setSplitSaved(true)
       } else {
         setSplitSaved(false)
@@ -249,48 +249,7 @@ export default function SenderPage() {
     }
   }, [isConnected, isCorrectChain])
 
-  function setRow(i: number, patch: Partial<{ addr: string; bps: number }>) {
-    setRows(prev => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))
-    setSplitSaved(false)
-  }
-
-  function addRow(): void {
-    setRows(prev => [...prev, { addr: "", bps: 0 }])
-    setSplitSaved(false)
-  }
-
-  function removeRow(): void {
-    if (rows.length === 1) return
-    setRows(prev => prev.slice(0, -1))
-    setSplitSaved(false)
-  }
-
-  function onEvenSplit(): void {
-    if (rows.length === 0) return
-    const base = Math.floor(10000 / rows.length)
-    const remainder = 10000 - base * rows.length
-    const next = rows.map((r, i) => ({ ...r, bps: base + (i < remainder ? 1 : 0) }))
-    setRows(next)
-    setSplitSaved(false)
-  }
-
-  function validateRows(): string | null {
-    if (rows.length === 0) return "Add at least one recipient."
-    for (const r of rows) {
-      if (!/^0x[a-fA-F0-9]{40}$/.test(r.addr)) return "Invalid recipient address."
-      if (r.bps <= 0) return "Bps must be > 0."
-    }
-    if (totalBps !== 10000) return "Total bps must be exactly 10000."
-    return null
-  }
-
-  function onSaveSplit(): void {
-    const err = validateRows()
-    if (err) {
-      setToast(`❌ ${err}`)
-      return
-    }
-    
+  function handleSaveSplit(recipients: Recipient[]): void {
     if (!address) {
       setToast("❌ Connect your wallet first.")
       return
@@ -299,13 +258,13 @@ export default function SenderPage() {
     // Save split to localStorage only - NO on-chain transaction
     const key = getSplitKey(baseSepolia.id, address)
     const config = {
-      recipients: rows.map(r => ({ addr: r.addr, bps: r.bps })),
+      recipients: recipients.map(r => ({ addr: r.addr, bps: r.bps })),
       updatedAt: Date.now()
     }
     
     saveSplitToStorage(key, config)
+    setSavedRecipients(recipients)
     setSplitSaved(true)
-    setToast("✅ Split saved locally! You can now send tips.")
   }
 
   async function onSendTip(): Promise<void> {
@@ -440,174 +399,11 @@ export default function SenderPage() {
             </h1>
           </div>
 
-          <div
-            style={{
-              backgroundColor: "white",
-              borderRadius: "12px",
-              padding: "28px",
-              marginBottom: "24px",
-              border: "1px solid #e5e5e5",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "24px",
-                paddingBottom: "20px",
-                borderBottom: "1px solid #f5f5f5",
-              }}
-            >
-              <h2 style={{ fontSize: "1.125rem", fontWeight: "600", color: "#171717", margin: 0 }}>
-                Configure my split
-              </h2>
-              <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-                <span style={{ fontSize: "0.75rem", color: "#737373" }}>
-                  Total: {totalBps}/10000 bps
-                </span>
-                <button
-                  id="btn-even-split"
-                  onClick={onEvenSplit}
-                  style={{
-                    padding: "0.5rem 1rem",
-                    backgroundColor: "#262626",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "6px",
-                    cursor: "pointer",
-                    fontSize: "0.8125rem",
-                    fontWeight: "500",
-                    transition: "background-color 0.15s ease",
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#404040")}
-                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#262626")}
-                >
-                  Even Split
-                </button>
-              </div>
-            </div>
-
-            <div style={{ marginBottom: "20px" }}>
-              {rows.map((row, index) => (
-                <div
-                  key={index}
-                  style={{
-                    display: "flex",
-                    gap: "12px",
-                    marginBottom: "12px",
-                  }}
-                >
-                  <input
-                    id={`addr-${index}`}
-                    type="text"
-                    placeholder="0x..."
-                    value={row.addr}
-                    onChange={(e) => setRow(index, { addr: e.target.value.trim() })}
-                    style={{
-                      flex: "2",
-                      padding: "0.625rem 0.875rem",
-                      border: "1px solid #d4d4d4",
-                      borderRadius: "6px",
-                      fontSize: "0.875rem",
-                      outline: "none",
-                      transition: "border-color 0.15s ease, box-shadow 0.15s ease",
-                    }}
-                    onFocus={(e) => {
-                      e.currentTarget.style.borderColor = "#a3a3a3"
-                      e.currentTarget.style.boxShadow = "0 0 0 3px rgba(0,120,255,0.08)"
-                    }}
-                    onBlur={(e) => {
-                      e.currentTarget.style.borderColor = "#d4d4d4"
-                      e.currentTarget.style.boxShadow = "none"
-                    }}
-                  />
-                  <input
-                    id={`bps-${index}`}
-                    type="number"
-                    placeholder="bps"
-                    value={row.bps}
-                    onChange={(e) => setRow(index, { bps: Number(e.target.value) })}
-                    style={{
-                      flex: "1",
-                      minWidth: "100px",
-                      padding: "0.625rem 0.875rem",
-                      border: "1px solid #d4d4d4",
-                      borderRadius: "6px",
-                      fontSize: "0.875rem",
-                      outline: "none",
-                      transition: "border-color 0.15s ease, box-shadow 0.15s ease",
-                    }}
-                    onFocus={(e) => {
-                      e.currentTarget.style.borderColor = "#a3a3a3"
-                      e.currentTarget.style.boxShadow = "0 0 0 3px rgba(0,120,255,0.08)"
-                    }}
-                    onBlur={(e) => {
-                      e.currentTarget.style.borderColor = "#d4d4d4"
-                      e.currentTarget.style.boxShadow = "none"
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
-
-            <div style={{ display: "flex", gap: "10px", marginBottom: "24px" }}>
-              <button
-                id="btn-add-row"
-                onClick={addRow}
-                style={grayButtonStyle}
-                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#525252")}
-                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#737373")}
-              >
-                Add Row
-              </button>
-              <button
-                id="btn-remove-row"
-                onClick={removeRow}
-                disabled={rows.length === 1}
-                style={rows.length === 1 ? grayButtonDisabledStyle : grayButtonStyle}
-                onMouseEnter={(e) => {
-                  if (rows.length > 1) e.currentTarget.style.backgroundColor = "#525252"
-                }}
-                onMouseLeave={(e) => {
-                  if (rows.length > 1) e.currentTarget.style.backgroundColor = "#737373"
-                }}
-              >
-                Remove Row
-              </button>
-            </div>
-
-            <button
-              id="btn-set-split"
-              onClick={onSaveSplit}
-              disabled={!!validateRows() || !address}
-              style={{
-                width: "100%",
-                padding: "0.875rem",
-                backgroundColor: (validateRows() || !address) ? "#d4d4d4" : "#262626",
-                color: "white",
-                border: "none",
-                borderRadius: "8px",
-                cursor: (validateRows() || !address) ? "not-allowed" : "pointer",
-                fontSize: "0.9375rem",
-                fontWeight: "600",
-                transition: "background-color 0.15s ease",
-              }}
-              onMouseEnter={(e) => {
-                if (!validateRows() && address) {
-                  e.currentTarget.style.backgroundColor = "#404040"
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!validateRows() && address) {
-                  e.currentTarget.style.backgroundColor = "#262626"
-                }
-              }}
-            >
-              {splitSaved ? "Split Saved ✓" : "Save Split"}
-            </button>
-          </div>
+          <SplitConfigurator
+            initial={savedRecipients}
+            onSave={handleSaveSplit}
+            className="mb-6"
+          />
 
           <div
             style={{
