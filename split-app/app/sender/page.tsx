@@ -9,6 +9,7 @@ import { parseEther } from "viem"
 import { baseSepolia } from "viem/chains"
 import { injected } from "wagmi/connectors"
 import TipSplitterABIJson from "@/src/abi/TipSplitter.json"
+import { getSplitKey, saveSplitToStorage, loadSplitFromStorage } from "@/lib/utils"
 
 const TipSplitterABI = TipSplitterABIJson as any
 
@@ -227,6 +228,20 @@ export default function SenderPage() {
   const isCorrectChain = chainId === baseSepolia.id
   const totalBps = rows.reduce((acc, r) => acc + (Number.isFinite(r.bps) ? r.bps : 0), 0)
 
+  // Load split config from localStorage on wallet connection
+  useEffect(() => {
+    if (address) {
+      const key = getSplitKey(baseSepolia.id, address)
+      const savedConfig = loadSplitFromStorage(key)
+      if (savedConfig && savedConfig.recipients.length > 0) {
+        setRows(savedConfig.recipients)
+        setSplitSaved(true)
+      } else {
+        setSplitSaved(false)
+      }
+    }
+  }, [address])
+
   // Détection du mauvais réseau à la connexion
   useEffect(() => {
     if (isConnected && !isCorrectChain) {
@@ -275,8 +290,22 @@ export default function SenderPage() {
       setToast(`❌ ${err}`)
       return
     }
+    
+    if (!address) {
+      setToast("❌ Connect your wallet first.")
+      return
+    }
+
+    // Save split to localStorage only - NO on-chain transaction
+    const key = getSplitKey(baseSepolia.id, address)
+    const config = {
+      recipients: rows.map(r => ({ addr: r.addr, bps: r.bps })),
+      updatedAt: Date.now()
+    }
+    
+    saveSplitToStorage(key, config)
     setSplitSaved(true)
-    setToast("✅ Split saved locally. You can now send a tip.")
+    setToast("✅ Split saved locally! You can now send tips.")
   }
 
   async function onSendTip(): Promise<void> {
@@ -306,21 +335,32 @@ export default function SenderPage() {
         setToast("❌ Save the split first.")
         return
       }
-      const err = validateRows()
-      if (err) {
-        setToast(`❌ ${err}`)
+      
+      if (!amountEth || Number(amountEth) <= 0) {
+        setToast("❌ Enter a valid amount.")
         return
       }
+      
       if (!tipSplitter) {
         setToast("❌ Contract address missing")
         return
       }
 
-      setIsSending(true)
-      const value = parseEther(amountEth || "0")
+      // Load split config from localStorage
+      const key = getSplitKey(baseSepolia.id, address)
+      const splitConfig = loadSplitFromStorage(key)
+      
+      if (!splitConfig || splitConfig.recipients.length === 0) {
+        setToast("❌ No split configuration found. Please save your split first.")
+        setSplitSaved(false)
+        return
+      }
 
-      // 1) setSplit
-      const recipients = rows.map(r => ({
+      setIsSending(true)
+      const value = parseEther(amountEth)
+
+      // 1) setSplit on-chain with the locally saved config
+      const recipients = splitConfig.recipients.map(r => ({
         addr: r.addr as `0x${string}`,
         shareBps: BigInt(r.bps),
       }))
@@ -335,8 +375,8 @@ export default function SenderPage() {
       })
       await waitForTransactionReceipt(config, { hash: tx1, chainId: baseSepolia.id })
 
-      // 2) deposit() with value
-      setToast("⏳ Sending tip...")
+      // 2) deposit() - distributes ETH immediately to recipients
+      setToast("⏳ Sending tip and distributing to recipients...")
       const tx2 = await writeContract(config, {
         abi: TipSplitterABI,
         address: tipSplitter,
@@ -345,6 +385,7 @@ export default function SenderPage() {
         value,
         chainId: baseSepolia.id,
       })
+      
       await waitForTransactionReceipt(config, { hash: tx2, chainId: baseSepolia.id })
 
       setToast(`✅ Tip sent and distributed! Tx: ${tx2.slice(0, 10)}...${tx2.slice(-8)}`)
@@ -540,26 +581,26 @@ export default function SenderPage() {
             <button
               id="btn-set-split"
               onClick={onSaveSplit}
-              disabled={!!validateRows()}
+              disabled={!!validateRows() || !address}
               style={{
                 width: "100%",
                 padding: "0.875rem",
-                backgroundColor: validateRows() ? "#d4d4d4" : "#262626",
+                backgroundColor: (validateRows() || !address) ? "#d4d4d4" : "#262626",
                 color: "white",
                 border: "none",
                 borderRadius: "8px",
-                cursor: validateRows() ? "not-allowed" : "pointer",
+                cursor: (validateRows() || !address) ? "not-allowed" : "pointer",
                 fontSize: "0.9375rem",
                 fontWeight: "600",
                 transition: "background-color 0.15s ease",
               }}
               onMouseEnter={(e) => {
-                if (!validateRows()) {
+                if (!validateRows() && address) {
                   e.currentTarget.style.backgroundColor = "#404040"
                 }
               }}
               onMouseLeave={(e) => {
-                if (!validateRows()) {
+                if (!validateRows() && address) {
                   e.currentTarget.style.backgroundColor = "#262626"
                 }
               }}

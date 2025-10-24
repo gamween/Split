@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { useWriteContract, useReadContract, useWaitForTransactionReceipt } from "wagmi"
 import ForwarderFactoryABI from "@/src/abi/ForwarderFactory.json"
+import { getSplitKey, saveSplitToStorage, loadSplitFromStorage } from "@/lib/utils"
 
 const PARTICLE_COUNT = 120
 const SPEED = 1.2
@@ -252,8 +253,36 @@ export default function ReceiverPage() {
   }
 
   function onSaveSplit(): void {
+    // Validate BPS total
+    const total = rowsRecv.reduce((sum, r) => sum + (parseInt(r.bps) || 0), 0)
+    if (total !== 10000) {
+      setToast("❌ Total BPS must be exactly 10000")
+      return
+    }
+    
+    // Validate addresses
+    for (const r of rowsRecv) {
+      if (!/^0x[a-fA-F0-9]{40}$/.test(r.addr)) {
+        setToast("❌ Invalid recipient address")
+        return
+      }
+    }
+    
+    if (!ownerAddress) {
+      setToast("❌ Please enter owner address first")
+      return
+    }
+
+    // Save to localStorage only - NO on-chain transaction
+    const key = getSplitKey(84532, ownerAddress) // Base Sepolia chainId
+    const config = {
+      recipients: rowsRecv.map(r => ({ addr: r.addr, bps: parseInt(r.bps) })),
+      updatedAt: Date.now()
+    }
+    
+    saveSplitToStorage(key, config)
     setStep1Done(true)
-    setToast("Split saved")
+    setToast("✅ Split saved locally")
   }
 
   function onGetForwarder(): void {
