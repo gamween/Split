@@ -68,7 +68,7 @@ function InteractiveBackground() {
       const deltaTime = Math.min((currentTime - lastTime) / 16, 2)
       lastTime = currentTime
 
-      ctx.fillStyle = "#fafafa"
+      ctx.fillStyle = "#ffffff"
       ctx.fillRect(0, 0, canvas.width, canvas.height)
 
       const mouseX = mouseRef.current.x

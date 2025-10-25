@@ -14,7 +14,7 @@ https://github.com/gamween/Split
 
 ## Live URL of your project
 
-https://split-f50rju1nu-gamween-7559s-projects.vercel.app
+https://split-q4x9i7223-gamween-7559s-projects.vercel.app
 
 ## What is your product's unique value proposition?
 
