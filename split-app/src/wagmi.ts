@@ -1,10 +1,10 @@
 import { createConfig, http } from 'wagmi'
-import { baseSepolia } from 'viem/chains'
+import { base } from 'viem/chains'
 
 export const config = createConfig({
-  chains: [baseSepolia],
+  chains: [base],
   transports: {
-    [baseSepolia.id]: http(process.env.NEXT_PUBLIC_RPC_URL!)
+    [base.id]: http()
   },
   ssr: true
 })

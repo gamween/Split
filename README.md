@@ -2,7 +2,7 @@
 
 ## The problem Spl!t solves
 
-Splitting onchain still means manual math, multiple sends, and trust that someone will redistribute. Split removes all coordination cost: one reusable address per group, one payment, instant trustless distribution to every recipient according to predefined bps. No spreadsheets. No chasing. Money lands correctly on-chain the first time.
+Spl!t solves the core problem of shared payments without adding layers of features or coordination. Most "split" apps try to track bills, receipts, chats, reminders, or social context — but in reality, the common need is far simpler: one shared payment that automatically routes to everyone, correctly, every time. Spl!t is intentionally minimal: you define the split once, receive a single reusable on-chain address, and any funds sent to it are instantly distributed according to the predefined bps. No reminders, no spreadsheets, no manual math, no social friction. The split becomes invisible because it is built into the payment itself.
 
 ## Challenges I ran into
 
@@ -14,7 +14,7 @@ https://github.com/gamween/Split
 
 ## Live URL of your project
 
-https://split-jo5ugi7pr-gamween-7559s-projects.vercel.app
+https://split-f50rju1nu-gamween-7559s-projects.vercel.app
 
 ## What is your product's unique value proposition?
 

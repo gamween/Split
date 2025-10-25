@@ -5,7 +5,7 @@ import Link from "next/link"
 import { useAccount, useConnect, useDisconnect, useChainId, useSwitchChain, useReadContract, usePublicClient } from "wagmi"
 import { useConfig } from "wagmi"
 import { writeContract, waitForTransactionReceipt } from "@wagmi/core"
-import { baseSepolia } from "viem/chains"
+import { base } from "viem/chains"
 import { injected } from "wagmi/connectors"
 import ForwarderFactoryABI from "@/src/abi/ForwarderFactory.json"
 import TipSplitterABI from "@/src/abi/TipSplitter.json"
@@ -202,9 +202,9 @@ export default function ReceiverPage() {
   const config = useConfig()
   const chainId = useChainId()
   const { switchChain } = useSwitchChain()
-  const publicClient = usePublicClient({ chainId: baseSepolia.id })
+  const publicClient = usePublicClient({ chainId: base.id })
 
-  const isCorrectChain = chainId === baseSepolia.id
+  const isCorrectChain = chainId === base.id
 
   // Disconnect wallet on initial page load only
   useEffect(() => {
@@ -278,7 +278,7 @@ export default function ReceiverPage() {
   async function handleSaveSplit(recipients: Recipient[]): Promise<void> {
     // Save to localStorage
     const firstRecipient = recipients[0]?.addr || `temp_${Date.now()}`
-    const key = getSplitKey(84532, firstRecipient) // Base Sepolia chainId
+    const key = getSplitKey(8453, firstRecipient) // Base Mainnet chainId
     const config = {
       recipients: recipients.map(r => ({ addr: r.addr, bps: r.bps })),
       updatedAt: Date.now()
@@ -328,7 +328,7 @@ export default function ReceiverPage() {
         })
         if (switchChain) {
           try {
-            await switchChain({ chainId: baseSepolia.id })
+            await switchChain({ chainId: base.id })
             return
           } catch (switchError) {
             return
@@ -368,7 +368,7 @@ export default function ReceiverPage() {
         abi: TipSplitterABI,
         functionName: "setSplit",
         args: [contractRecipients],
-        chainId: baseSepolia.id,
+        chainId: base.id,
       })
 
       toast({
@@ -378,7 +378,7 @@ export default function ReceiverPage() {
 
       await waitForTransactionReceipt(config, { 
         hash: txHash, 
-        chainId: baseSepolia.id 
+        chainId: base.id 
       })
 
       setStep1Done(true)
@@ -433,7 +433,7 @@ export default function ReceiverPage() {
         abi: ForwarderFactoryABI,
         functionName: "deploy",
         args: [ownerAddr],
-        chainId: baseSepolia.id,
+        chainId: base.id,
       })
 
       toast({
@@ -443,7 +443,7 @@ export default function ReceiverPage() {
 
       await waitForTransactionReceipt(config, { 
         hash: txHash, 
-        chainId: baseSepolia.id 
+        chainId: base.id 
       })
 
       setForwarderDeployed(true)
@@ -511,7 +511,7 @@ export default function ReceiverPage() {
                 letterSpacing: "-0.02em",
               }}
             >
-              Receiver
+              Receiver (beta)
             </h1>
           </div>
 
@@ -730,7 +730,7 @@ export default function ReceiverPage() {
                     }}>
                       <strong>Step 1:</strong> Register your split configuration on the TipSplitter contract.<br/><br/>
                       <strong>Step 2:</strong> Deploy the Forwarder contract that will automatically redistribute payments to all recipients. Without this step, funds sent to the address will just sit there.<br/><br/>
-                      Both steps require a small gas fee (usually a few cents).
+                      Both steps require a small gas fee (usually a few cents) that must be paid by the first address in the split.
                       <div style={{
                         position: "absolute",
                         top: "100%",

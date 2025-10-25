@@ -425,7 +425,7 @@ export default function HomePage() {
                 transition: "all 0.2s",
               }}
             >
-              I'm a Receiver
+              I'm a Receiver (beta)
             </Link>
           </div>
         </div>

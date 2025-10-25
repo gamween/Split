@@ -6,7 +6,7 @@ import { useAccount, useConnect, useDisconnect, useChainId, useSwitchChain } fro
 import { useConfig } from "wagmi"
 import { sendTransaction, waitForTransactionReceipt } from "@wagmi/core"
 import { parseEther } from "viem"
-import { baseSepolia } from "viem/chains"
+import { base } from "viem/chains"
 import { injected } from "wagmi/connectors"
 import { getSplitKey, saveSplitToStorage, loadSplitFromStorage } from "@/lib/utils"
 import { SplitConfigurator, type Recipient } from "@/components/SplitConfigurator"
@@ -195,7 +195,7 @@ export default function SenderPage() {
   const chainId = useChainId()
   const { switchChain } = useSwitchChain()
 
-  const isCorrectChain = chainId === baseSepolia.id
+  const isCorrectChain = chainId === base.id
 
   // Disconnect wallet on initial page load only
   useEffect(() => {
@@ -209,7 +209,7 @@ export default function SenderPage() {
   // Load split config from localStorage on wallet connection
   useEffect(() => {
     if (address) {
-      const key = getSplitKey(baseSepolia.id, address)
+      const key = getSplitKey(base.id, address)
       const savedConfig = loadSplitFromStorage(key)
       if (savedConfig && savedConfig.recipients.length > 0) {
         setSavedRecipients(savedConfig.recipients)
@@ -235,7 +235,7 @@ export default function SenderPage() {
     // NO wallet check here - Save split works without wallet connection
     
     // Save split to localStorage only - NO on-chain transaction
-    const key = address ? getSplitKey(baseSepolia.id, address) : `split_temp_${Date.now()}`
+    const key = address ? getSplitKey(base.id, address) : `split_temp_${Date.now()}`
     const config = {
       recipients: recipients.map(r => ({ addr: r.addr, bps: r.bps })),
       updatedAt: Date.now()
@@ -282,7 +282,7 @@ export default function SenderPage() {
         })
         if (switchChain) {
           try {
-            await switchChain({ chainId: baseSepolia.id })
+            await switchChain({ chainId: base.id })
             toast({
               title: "Switching Network",
               description: "Switching to Base Sepolia...",
@@ -301,7 +301,7 @@ export default function SenderPage() {
       }
       
       // 3) Load split config from localStorage
-      const key = getSplitKey(baseSepolia.id, address)
+      const key = getSplitKey(base.id, address)
       const splitConfig = loadSplitFromStorage(key)
       
       if (!splitConfig || splitConfig.recipients.length === 0) {
@@ -371,12 +371,12 @@ export default function SenderPage() {
         const txHash = await sendTransaction(config, {
           to: recipient.addr as `0x${string}`,
           value: shareWei,
-          chainId: baseSepolia.id,
+          chainId: base.id,
         })
 
         await waitForTransactionReceipt(config, { 
           hash: txHash, 
-          chainId: baseSepolia.id 
+          chainId: base.id 
         })
 
         txHashes.push(txHash)
