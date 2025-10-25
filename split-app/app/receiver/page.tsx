@@ -6,6 +6,7 @@ import { useWriteContract, useReadContract, useWaitForTransactionReceipt } from 
 import ForwarderFactoryABI from "@/src/abi/ForwarderFactory.json"
 import { getSplitKey, saveSplitToStorage, loadSplitFromStorage } from "@/lib/utils"
 import { SplitConfigurator, type Recipient } from "@/components/SplitConfigurator"
+import { toast } from "@/components/ui/use-toast"
 
 const PARTICLE_COUNT = 120
 const SPEED = 1.2
@@ -159,33 +160,6 @@ function InteractiveBackground() {
   return <canvas ref={canvasRef} style={{ position: "fixed", top: 0, left: 0, zIndex: -1 }} />
 }
 
-function Toast({ message, onClose }: { message: string; onClose: () => void }) {
-  useEffect(() => {
-    const timer = setTimeout(onClose, 3000)
-    return () => clearTimeout(timer)
-  }, [onClose])
-
-  return (
-    <div
-      style={{
-        position: "fixed",
-        top: "24px",
-        right: "24px",
-        backgroundColor: "#262626",
-        color: "#fafafa",
-        padding: "0.875rem 1.25rem",
-        borderRadius: "8px",
-        boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
-        zIndex: 1000,
-        fontSize: "0.875rem",
-        fontWeight: "500",
-      }}
-    >
-      {message}
-    </div>
-  )
-}
-
 const grayButtonStyle = {
   padding: "0.5rem 1rem",
   backgroundColor: "#737373",
@@ -208,11 +182,14 @@ export default function ReceiverPage() {
   const [savedRecipients, setSavedRecipients] = useState<Recipient[]>([{ addr: "", bps: 0 }])
   const [forwarder, setForwarder] = useState<string>("")
   const [paylink, setPaylink] = useState<string>("")
-  const [toast, setToast] = useState<string>("")
   const [step1Done, setStep1Done] = useState<boolean>(false)
-  const [ownerAddress, setOwnerAddress] = useState<string>("")
 
   const factoryAddress = process.env.NEXT_PUBLIC_FACTORY as `0x${string}`
+  
+  // Generate a deterministic owner address from the split configuration
+  const derivedOwner = savedRecipients.length > 0 && savedRecipients[0].addr 
+    ? savedRecipients[0].addr 
+    : "0x0000000000000000000000000000000000000001"
 
   const { writeContract, data: hash, isPending: isDeploying } = useWriteContract()
   const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash })
@@ -221,7 +198,7 @@ export default function ReceiverPage() {
     address: factoryAddress,
     abi: ForwarderFactoryABI,
     functionName: "forwarderAddress",
-    args: ownerAddress ? [ownerAddress as `0x${string}`] : undefined,
+    args: [derivedOwner as `0x${string}`],
   })
 
   useEffect(() => {
@@ -229,18 +206,21 @@ export default function ReceiverPage() {
       const fwdAddress = computedForwarder as string
       setForwarder(fwdAddress)
       setPaylink(`ethereum:${fwdAddress}`)
-      setToast("Unique address created")
+      toast({
+        title: "Success",
+        description: "Unique address created",
+      })
     }
   }, [isConfirmed, computedForwarder])
 
   function handleSaveSplit(recipients: Recipient[]): void {
-    if (!ownerAddress) {
-      setToast("❌ Please enter owner address first")
-      return
-    }
-
     // Save to localStorage only - NO on-chain transaction
-    const key = getSplitKey(84532, ownerAddress) // Base Sepolia chainId
+    // Use first recipient address as key identifier
+    const keyIdentifier = recipients.length > 0 && recipients[0].addr 
+      ? recipients[0].addr 
+      : `temp_${Date.now()}`
+    
+    const key = getSplitKey(84532, keyIdentifier) // Base Sepolia chainId
     const config = {
       recipients: recipients.map(r => ({ addr: r.addr, bps: r.bps })),
       updatedAt: Date.now()
@@ -253,11 +233,11 @@ export default function ReceiverPage() {
 
   function onGetForwarder(): void {
     if (!step1Done) {
-      setToast("Please save split first")
-      return
-    }
-    if (!ownerAddress) {
-      setToast("Please enter owner address")
+      toast({
+        title: "Split Required",
+        description: "Please save split first",
+        variant: "destructive",
+      })
       return
     }
     
@@ -265,30 +245,29 @@ export default function ReceiverPage() {
       address: factoryAddress,
       abi: ForwarderFactoryABI,
       functionName: "getOrDeploy",
-      args: [ownerAddress as `0x${string}`],
+      args: [derivedOwner as `0x${string}`],
     })
   }
 
   function onCopyAddress(): void {
     if (!forwarder) return
     navigator.clipboard.writeText(forwarder).then(
-      () => setToast("Address copied"),
-      () => setToast("Failed to copy address")
+      () => toast({ title: "Success", description: "Address copied" }),
+      () => toast({ title: "Error", description: "Failed to copy address", variant: "destructive" })
     )
   }
 
   function onCopyPaymentLink(): void {
     if (!paylink) return
     navigator.clipboard.writeText(paylink).then(
-      () => setToast("Payment link copied"),
-      () => setToast("Failed to copy link")
+      () => toast({ title: "Success", description: "Payment link copied" }),
+      () => toast({ title: "Error", description: "Failed to copy link", variant: "destructive" })
     )
   }
 
   return (
     <>
       <InteractiveBackground />
-      {toast && <Toast message={toast} onClose={() => setToast("")} />}
       <div
         style={{
           minHeight: "100vh",
@@ -340,73 +319,11 @@ export default function ReceiverPage() {
               backgroundColor: "white",
               borderRadius: "12px",
               padding: "28px",
-              marginBottom: "24px",
-              border: "1px solid #e5e5e5",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-            }}
-          >
-            <h2
-              style={{
-                fontSize: "1.125rem",
-                fontWeight: "600",
-                marginBottom: "24px",
-                color: "#171717",
-              }}
-            >
-              Owner Address
-            </h2>
-            <input
-              id="owner-address"
-              type="text"
-              placeholder="0x..."
-              value={ownerAddress}
-              onChange={(e) => setOwnerAddress(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "0.625rem 0.875rem",
-                border: "1px solid #d4d4d4",
-                borderRadius: "6px",
-                fontSize: "0.875rem",
-                outline: "none",
-                transition: "border-color 0.15s ease, box-shadow 0.15s ease",
-              }}
-              onFocus={(e) => {
-                e.currentTarget.style.borderColor = "#a3a3a3"
-                e.currentTarget.style.boxShadow = "0 0 0 3px rgba(0,120,255,0.08)"
-              }}
-              onBlur={(e) => {
-                e.currentTarget.style.borderColor = "#d4d4d4"
-                e.currentTarget.style.boxShadow = "none"
-              }}
-            />
-          </div>
-
-          <div
-            style={{
-              backgroundColor: "white",
-              borderRadius: "12px",
-              padding: "28px",
               border: "1px solid #e5e5e5",
               boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
               position: "relative",
             }}
           >
-            {!step1Done && (
-              <div
-                style={{
-                  position: "absolute",
-                  top: "16px",
-                  right: "16px",
-                  fontSize: "0.6875rem",
-                  color: "#a3a3a3",
-                  fontWeight: "600",
-                  letterSpacing: "0.03em",
-                  textTransform: "uppercase",
-                }}
-              >
-                Step 1 required
-              </div>
-            )}
             <div style={{ pointerEvents: step1Done ? "auto" : "none", opacity: step1Done ? 1 : 0.5 }}>
               <h2
                 style={{
@@ -426,26 +343,26 @@ export default function ReceiverPage() {
                 <button
                   id="btn-get-forwarder"
                   onClick={onGetForwarder}
-                  disabled={isDeploying || isConfirming || !step1Done || !ownerAddress}
+                  disabled={isDeploying || isConfirming || !step1Done}
                   style={{
                     width: "100%",
                     padding: "0.75rem 1.25rem",
-                    backgroundColor: (isDeploying || isConfirming || !step1Done || !ownerAddress) ? "#d4d4d4" : "#262626",
+                    backgroundColor: (isDeploying || isConfirming || !step1Done) ? "#d4d4d4" : "#262626",
                     color: "white",
                     border: "none",
                     borderRadius: "8px",
-                    cursor: (isDeploying || isConfirming || !step1Done || !ownerAddress) ? "not-allowed" : "pointer",
+                    cursor: (isDeploying || isConfirming || !step1Done) ? "not-allowed" : "pointer",
                     fontSize: "0.875rem",
                     fontWeight: "600",
                     transition: "background-color 0.15s ease",
                   }}
                   onMouseEnter={(e) => {
-                    if (!isDeploying && !isConfirming && step1Done && ownerAddress) {
+                    if (!isDeploying && !isConfirming && step1Done) {
                       e.currentTarget.style.backgroundColor = "#404040"
                     }
                   }}
                   onMouseLeave={(e) => {
-                    if (!isDeploying && !isConfirming && step1Done && ownerAddress) {
+                    if (!isDeploying && !isConfirming && step1Done) {
                       e.currentTarget.style.backgroundColor = "#262626"
                     }
                   }}
