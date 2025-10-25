@@ -74,6 +74,14 @@ export function SplitConfigurator({ initial = [{ addr: "", bps: 0 }], onSave, cl
     setRows(next)
   }
 
+  function onClear(): void {
+    setRows([{ addr: "", bps: 0 }])
+    toast({
+      title: "Cleared",
+      description: "Split configuration has been reset",
+    })
+  }
+
   function handleSave(): void {
     const errors = validate(rows)
     if (errors.length > 0) {
@@ -125,30 +133,49 @@ export function SplitConfigurator({ initial = [{ addr: "", bps: 0 }], onSave, cl
             whiteSpace: "nowrap",
             overflow: "hidden",
             textOverflow: "ellipsis",
-            maxWidth: "calc(100% - 90px)",
+            flex: 1,
           }}
         >
           Configure my split
         </h2>
-        <button
-          onClick={onEvenSplit}
-          style={{
-            padding: "0.5rem 1rem",
-            backgroundColor: "#262626",
-            color: "white",
-            border: "none",
-            borderRadius: "6px",
-            cursor: "pointer",
-            fontSize: "0.8125rem",
-            fontWeight: "500",
-            transition: "background-color 0.15s ease",
-            flexShrink: 0,
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#404040")}
-          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#262626")}
-        >
-          Even
-        </button>
+        <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
+          <button
+            onClick={onClear}
+            style={{
+              padding: "0.5rem 1rem",
+              backgroundColor: "#737373",
+              color: "white",
+              border: "none",
+              borderRadius: "6px",
+              cursor: "pointer",
+              fontSize: "0.8125rem",
+              fontWeight: "500",
+              transition: "background-color 0.15s ease",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#525252")}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#737373")}
+          >
+            Clear
+          </button>
+          <button
+            onClick={onEvenSplit}
+            style={{
+              padding: "0.5rem 1rem",
+              backgroundColor: "#262626",
+              color: "white",
+              border: "none",
+              borderRadius: "6px",
+              cursor: "pointer",
+              fontSize: "0.8125rem",
+              fontWeight: "500",
+              transition: "background-color 0.15s ease",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#404040")}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#262626")}
+          >
+            Even
+          </button>
+        </div>
       </div>
 
       <div style={{ marginBottom: "20px" }}>

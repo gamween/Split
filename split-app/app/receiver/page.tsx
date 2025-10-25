@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
-import { useAccount, useConnect, useDisconnect, useChainId, useSwitchChain, useReadContract } from "wagmi"
+import { useAccount, useConnect, useDisconnect, useChainId, useSwitchChain, useReadContract, usePublicClient } from "wagmi"
 import { useConfig } from "wagmi"
 import { writeContract, waitForTransactionReceipt } from "@wagmi/core"
 import { baseSepolia } from "viem/chains"
@@ -188,6 +188,8 @@ export default function ReceiverPage() {
   const [forwarder, setForwarder] = useState<string>("")
   const [step1Done, setStep1Done] = useState<boolean>(false)
   const [isRegistering, setIsRegistering] = useState<boolean>(false)
+  const [isDeploying, setIsDeploying] = useState<boolean>(false)
+  const [forwarderDeployed, setForwarderDeployed] = useState<boolean>(false)
   const [showTooltip, setShowTooltip] = useState<boolean>(false)
 
   const factoryAddress = process.env.NEXT_PUBLIC_FACTORY as `0x${string}`
@@ -199,6 +201,7 @@ export default function ReceiverPage() {
   const config = useConfig()
   const chainId = useChainId()
   const { switchChain } = useSwitchChain()
+  const publicClient = usePublicClient({ chainId: baseSepolia.id })
 
   const isCorrectChain = chainId === baseSepolia.id
   
@@ -213,6 +216,40 @@ export default function ReceiverPage() {
     functionName: "forwarderAddress",
     args: [ownerAddress as `0x${string}`],
   })
+
+  // Check if split is already registered on-chain
+  const { data: splitLength } = useReadContract({
+    address: tipSplitterAddress,
+    abi: TipSplitterABI,
+    functionName: "getSplitLength",
+    args: [ownerAddress as `0x${string}`],
+  })
+
+  useEffect(() => {
+    // Check if split is already registered (length > 0)
+    if (splitLength && Number(splitLength) > 0 && !step1Done) {
+      setStep1Done(true)
+    }
+  }, [splitLength, step1Done])
+
+  useEffect(() => {
+    // Check if forwarder is deployed by trying to read its bytecode
+    async function checkForwarderDeployment() {
+      if (!computedForwarder || !publicClient) return
+      
+      try {
+        const code = await publicClient.getBytecode({ address: computedForwarder as `0x${string}` })
+        
+        if (code && code !== "0x" && !forwarderDeployed) {
+          setForwarderDeployed(true)
+        }
+      } catch (error) {
+        // Forwarder not deployed yet
+      }
+    }
+    
+    checkForwarderDeployment()
+  }, [computedForwarder, publicClient, forwarderDeployed])
 
   useEffect(() => {
     // Automatically display the computed forwarder address when split is saved and registered
@@ -267,11 +304,13 @@ export default function ReceiverPage() {
         return
       }
 
-      // 3) Check if connected wallet is the first recipient
-      if (!isConnected || !address) {
+      // 3) IMPORTANT: Check if connected wallet is the OWNER (first recipient)
+      // This is required because the split must be registered under the owner's address
+      const firstRecipient = savedRecipients[0]?.addr
+      if (!firstRecipient || address.toLowerCase() !== firstRecipient.toLowerCase()) {
         toast({
-          title: "Wallet Required",
-          description: "Connect your wallet to register the split.",
+          title: "Wrong Wallet",
+          description: `You must connect with the first recipient's wallet (${firstRecipient?.slice(0, 6)}...${firstRecipient?.slice(-4)}) to register this split.`,
           variant: "destructive",
         })
         return
@@ -322,6 +361,71 @@ export default function ReceiverPage() {
       toast({
         title: "Registration Failed",
         description: e?.shortMessage || e?.message || "Failed to register split",
+        variant: "destructive",
+      })
+    }
+  }
+
+  async function handleDeployForwarder(): Promise<void> {
+    if (!isConnected || !address) {
+      toast({ 
+        title: "Wallet Not Connected", 
+        description: "Please connect your wallet first.", 
+        variant: "destructive" 
+      })
+      return
+    }
+
+    if (!isCorrectChain) {
+      toast({ 
+        title: "Wrong Network", 
+        description: "Please switch to Base Sepolia.", 
+        variant: "destructive" 
+      })
+      return
+    }
+
+    try {
+      setIsDeploying(true)
+
+      const ownerAddr = savedRecipients[0].addr as `0x${string}`
+
+      toast({
+        title: "Deploying Forwarder",
+        description: "Please confirm the transaction in your wallet...",
+      })
+
+      const txHash = await writeContract(config, {
+        address: factoryAddress,
+        abi: ForwarderFactoryABI,
+        functionName: "deploy",
+        args: [ownerAddr],
+        chainId: baseSepolia.id,
+      })
+
+      toast({
+        title: "Waiting for Confirmation",
+        description: "Transaction submitted, waiting for confirmation...",
+      })
+
+      await waitForTransactionReceipt(config, { 
+        hash: txHash, 
+        chainId: baseSepolia.id 
+      })
+
+      setForwarderDeployed(true)
+      setIsDeploying(false)
+
+      toast({
+        title: "Success!",
+        description: "Forwarder deployed! You can now receive payments.",
+      })
+
+    } catch (e: any) {
+      setIsDeploying(false)
+      toast({
+        title: "Deployment Failed",
+        description: e?.shortMessage || e?.message || "Failed to deploy forwarder",
         variant: "destructive",
       })
     }
@@ -462,36 +566,99 @@ export default function ReceiverPage() {
 
             {!step1Done ? (
               <>
+                {savedRecipients[0]?.addr && (
+                  <div style={{ 
+                    padding: "12px 16px",
+                    backgroundColor: "#fef3c7",
+                    border: "1px solid #fbbf24",
+                    borderRadius: "8px",
+                    marginBottom: "20px",
+                    fontSize: "0.8125rem",
+                    color: "#92400e",
+                    lineHeight: "1.5"
+                  }}>
+                    <strong>Important:</strong> The first recipient ({savedRecipients[0].addr.slice(0, 6)}...{savedRecipients[0].addr.slice(-4)}) must connect their wallet to register the split on-chain.
+                  </div>
+                )}
+                
                 <div style={{ marginBottom: "20px" }}>
                   <button
                     onClick={handleRegisterSplit}
-                    disabled={!isConnected || isRegistering || !isCorrectChain}
+                    disabled={!isConnected || isRegistering || !isCorrectChain || step1Done}
                     style={{
                       width: "100%",
                       padding: "0.875rem",
-                      backgroundColor: (!isConnected || isRegistering || !isCorrectChain) ? "#d4d4d4" : "#262626",
+                      backgroundColor: (!isConnected || isRegistering || !isCorrectChain || step1Done) ? "#d4d4d4" : "#262626",
                       color: "white",
                       border: "none",
                       borderRadius: "8px",
-                      cursor: (!isConnected || isRegistering || !isCorrectChain) ? "not-allowed" : "pointer",
+                      cursor: (!isConnected || isRegistering || !isCorrectChain || step1Done) ? "not-allowed" : "pointer",
                       fontSize: "0.9375rem",
                       fontWeight: "600",
                       transition: "background-color 0.15s ease",
                     }}
                     onMouseEnter={(e) => {
-                      if (isConnected && !isRegistering && isCorrectChain) {
+                      if (isConnected && !isRegistering && isCorrectChain && !step1Done) {
                         e.currentTarget.style.backgroundColor = "#404040"
                       }
                     }}
                     onMouseLeave={(e) => {
-                      if (isConnected && !isRegistering && isCorrectChain) {
+                      if (isConnected && !isRegistering && isCorrectChain && !step1Done) {
                         e.currentTarget.style.backgroundColor = "#262626"
                       }
                     }}
                   >
-                    {isRegistering ? "Registering..." : !isCorrectChain && isConnected ? "Wrong Network" : "Register Split On-Chain"}
+                    {step1Done ? "✓ Split Registered" : isRegistering ? "Registering..." : !isCorrectChain && isConnected ? "Wrong Network" : "1. Register Split On-Chain"}
                   </button>
                 </div>
+
+                {step1Done && !forwarderDeployed && (
+                  <div style={{ marginBottom: "20px" }}>
+                    <button
+                      onClick={handleDeployForwarder}
+                      disabled={isDeploying || !isCorrectChain}
+                      style={{
+                        width: "100%",
+                        padding: "0.875rem",
+                        backgroundColor: (isDeploying || !isCorrectChain) ? "#d4d4d4" : "#059669",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "8px",
+                        cursor: (isDeploying || !isCorrectChain) ? "not-allowed" : "pointer",
+                        fontSize: "0.9375rem",
+                        fontWeight: "600",
+                        transition: "background-color 0.15s ease",
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isDeploying && isCorrectChain) {
+                          e.currentTarget.style.backgroundColor = "#047857"
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isDeploying && isCorrectChain) {
+                          e.currentTarget.style.backgroundColor = "#059669"
+                        }
+                      }}
+                    >
+                      {isDeploying ? "Deploying Forwarder..." : "2. Deploy Forwarder Contract"}
+                    </button>
+                  </div>
+                )}
+
+                {forwarderDeployed && (
+                  <div style={{
+                    padding: "12px 16px",
+                    backgroundColor: "#dcfce7",
+                    border: "1px solid #86efac",
+                    borderRadius: "8px",
+                    marginBottom: "20px",
+                    fontSize: "0.8125rem",
+                    color: "#166534",
+                    lineHeight: "1.5"
+                  }}>
+                    ✓ Forwarder deployed! Payments sent to your address will now be automatically distributed to all recipients.
+                  </div>
+                )}
 
                 <div style={{ textAlign: "center", position: "relative", marginTop: "16px" }}>
                   <span 
@@ -521,13 +688,15 @@ export default function ReceiverPage() {
                       borderRadius: "8px",
                       fontSize: "0.75rem",
                       lineHeight: "1.5",
-                      maxWidth: "300px",
+                      maxWidth: "320px",
                       width: "max-content",
                       boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
                       zIndex: 1000,
                       textAlign: "left"
                     }}>
-                      To generate your unique payment address, the split configuration needs to be registered on-chain. This requires a small gas fee (usually a few cents). Any wallet can pay this fee - it doesn't have to be one of the recipients.
+                      <strong>Step 1:</strong> Register your split configuration on the TipSplitter contract.<br/><br/>
+                      <strong>Step 2:</strong> Deploy the Forwarder contract that will automatically redistribute payments to all recipients. Without this step, funds sent to the address will just sit there.<br/><br/>
+                      Both steps require a small gas fee (usually a few cents).
                       <div style={{
                         position: "absolute",
                         top: "100%",
