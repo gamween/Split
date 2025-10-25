@@ -1,96 +1,34 @@
-# Spl!t — Split payments effortlessly
+# Spl!t
 
-Minimal Farcaster mini-app + smart contracts to split a tip among multiple addresses on Base.
+## The problem Spl!t solves
 
-## Live / Demo
-- Local dev: `npm run dev` in `split-app/` (http://localhost:3000)
-- Optional: add your deployed URL here if available.
+Splitting onchain still means manual math, multiple sends, and trust that someone will redistribute. Split removes all coordination cost: one reusable address per group, one payment, instant trustless distribution to every recipient according to predefined bps. No spreadsheets. No chasing. Money lands correctly on-chain the first time.
 
-## Architecture
-- `split-app/` — Next.js (App Router). Pages:
-  - `/` home
-  - `/sender` set split → send tip
-  - `/receiver` save split → get unique address / payment link
-- `tipsplitter-contracts/` — Foundry Solidity:
-  - `TipSplitter.sol` with `setSplit(owner, recipients)` and `deposit(owner)` (ETH split by bps)
-  - `Forwarder.sol` + `ForwarderFactory.sol` for deterministic unique receiver addresses via CREATE2
+## Challenges I ran into
 
-## Contracts
-- Base Sepolia `TipSplitter`: **0x06b68a99C83319cB546939023cfc92CdeF046Ee8**
-- Base Sepolia `ForwarderFactory`: **[Run deployment script to get address]**
-- Base mainnet: **TBD** (deploy after testing)
+I'm new to Solidity/Base, so deploying safely and wiring wallets, factories, and tooling was a learning curve. The hardest piece was the forwarder: a factory that deterministically creates a unique receive address for each owner, then routes incoming funds to recipients by bps without extra signatures. Getting correctness around rounding, reentrancy, and efficient payouts took trial, tests, and several refactors, but once stable it unlocked the "send once, split automatically" experience.
 
-### How Unique Addresses Work
-Each receiver gets a deterministic forwarder address via CREATE2:
-1. Factory computes `forwarderAddress(owner)` without deploying
-2. On first use, `getOrDeploy(owner)` deploys a minimal `Forwarder` contract
-3. Any ETH sent to the forwarder is automatically forwarded to `TipSplitter.deposit(owner)` and split per saved config
-4. Address is deterministic and can be computed before first funding
-5. View on BaseScan: `https://sepolia.basescan.org/address/<forwarder-address>`
+## Link to the GitHub Repo of your project
 
-## Run locally (frontend)
-```bash
-cd split-app
-# Set in .env.local:
-# NEXT_PUBLIC_RPC_URL=https://sepolia.base.org
-# NEXT_PUBLIC_CONTRACT=0x06b68a99C83319cB546939023cfc92CdeF046Ee8
-# NEXT_PUBLIC_FACTORY=<factory-address-from-deployment>
-npm install
-npm run dev
-```
+https://github.com/gamween/Split
 
-## Deploy contracts (Foundry)
+## Live URL of your project
 
-### Deploy TipSplitter (if needed)
-```bash
-cd tipsplitter-contracts
-forge create src/TipSplitter.sol:TipSplitter \
-  --rpc-url $BASE_SEPOLIA_RPC_URL \
-  --private-key $PRIVATE_KEY \
-  --broadcast
-```
+https://split-jo5ugi7pr-gamween-7559s-projects.vercel.app
 
-### Deploy ForwarderFactory
-```bash
-cd tipsplitter-contracts
-# Set in .env:
-# TIP_SPLITTER=0x06b68a99C83319cB546939023cfc92CdeF046Ee8
-# BASE_SEPOLIA_RPC_URL=https://sepolia.base.org
-# PRIVATE_KEY=your-key
-forge script script/DeployFactory.s.sol:DeployFactory \
-  --rpc-url $BASE_SEPOLIA_RPC_URL \
-  --private-key $PRIVATE_KEY \
-  --broadcast
-```
+## What is your product's unique value proposition?
 
-The script will output the factory address. Add it to your frontend `.env.local` as `NEXT_PUBLIC_FACTORY`.
+Split turns any group into a single payable address that auto-routes funds on receipt. Set the split once, share the address forever, and every payment is distributed on-chain by bps with full transparency. Unlike tools that require custodians, CSV uploads, or post-payment reimbursements, Split is trustless, stateless for senders, and friction-free for receivers. The alpha proves it end-to-end: define recipients, get an address, pay it, and funds arrive split instantly.
 
-## How it works (short)
-1. **Receiver** sets recipients with shares (basis points, total 10000 = 100%)
-2. Receiver generates a unique payment address via the ForwarderFactory
-3. **Sender** sends ETH to the unique address
-4. Forwarder contract automatically forwards to TipSplitter which splits and distributes
-5. Each recipient receives their share instantly
+## Who is your target customer?
 
-The unique address is deterministic (CREATE2), so it can be computed and shared before receiving any funds.
+Small groups that repeatedly share money: friends and roommates, tip pools and service teams, creators and collaborators. In all cases one person usually becomes the banker. Split eliminates that role by giving the group a reusable payment target that pays everyone fairly by design.
 
-## Tech stack
-- Next.js + TypeScript, wagmi/viem
-- Solidity + Foundry
-- Base (Sepolia / Mainnet)
+## Who are your closest competitors and how are you different?
 
-## Folder structure
-```
-BB25/
-  split-app/               # frontend
-  tipsplitter-contracts/   # solidity + scripts
-  package.json
-```
+Closest: Multisender (https://multisender.app) and MetaSender (https://metasender.app) for bulk distributions, and Request Finance (https://request.finance) for invoicing and ops. Those products excel at scheduled payrolls, airdrops, or accounting flows that start with a dashboard and often require repeating setup or uploading lists each time. Split is different: it serves recurring, lightweight, human-to-human payments. Configure once, then any future payment to the group's address is auto-split. It's the "last-mile" of onchain finance where social coordination matters.
 
-## Notes
-- No wallet connect button required; UI accepts owner address directly.
-- BPS must sum to 10000.
-- Use testnet first; switch NEXT_PUBLIC_RPC_URL for mainnet.
+## What is your distribution strategy and why?
 
-## License
-MIT
+Community-first and simplicity-first. Start in Base and Farcaster circles where group payments already happen. One person using Split exposes it to everyone they transact with, so adoption is built into usage. No paid acquisition. Clear docs, a Mini App entry point, and a 15-second demo are enough to seed organic growth.
+

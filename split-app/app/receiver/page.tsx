@@ -500,7 +500,7 @@ export default function ReceiverPage() {
                     style={{ 
                       fontSize: "0.8125rem", 
                       color: "#737373",
-                      cursor: "help",
+                      cursor: "default",
                       borderBottom: "1px dotted #737373",
                       position: "relative"
                     }}
