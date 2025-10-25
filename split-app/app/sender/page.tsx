@@ -4,16 +4,13 @@ import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { useAccount, useConnect, useDisconnect, useChainId, useSwitchChain } from "wagmi"
 import { useConfig } from "wagmi"
-import { writeContract, waitForTransactionReceipt } from "@wagmi/core"
+import { sendTransaction, waitForTransactionReceipt } from "@wagmi/core"
 import { parseEther } from "viem"
 import { baseSepolia } from "viem/chains"
 import { injected } from "wagmi/connectors"
-import TipSplitterABIJson from "@/src/abi/TipSplitter.json"
 import { getSplitKey, saveSplitToStorage, loadSplitFromStorage } from "@/lib/utils"
 import { SplitConfigurator, type Recipient } from "@/components/SplitConfigurator"
 import { toast } from "@/components/ui/use-toast"
-
-const TipSplitterABI = TipSplitterABIJson as any
 
 const PARTICLE_COUNT = 120
 const SPEED = 1.2
@@ -191,7 +188,6 @@ export default function SenderPage() {
   const [splitSaved, setSplitSaved] = useState<boolean>(false)
   const [isSending, setIsSending] = useState<boolean>(false)
 
-  const tipSplitter = process.env.NEXT_PUBLIC_TIP_SPLITTER as `0x${string}`
   const { address, isConnected } = useAccount()
   const { connect, connectors, status: connectStatus } = useConnect()
   const { disconnect } = useDisconnect()
@@ -245,7 +241,7 @@ export default function SenderPage() {
 
   async function onSendTip(): Promise<void> {
     try {
-      // Check wallet connection first
+      // 1) Check wallet connection first
       if (!isConnected || !address) {
         toast({
           title: "Wallet Required",
@@ -255,7 +251,7 @@ export default function SenderPage() {
         return
       }
       
-      // Vérification de la chaîne
+      // 2) Vérification de la chaîne
       if (!isCorrectChain) {
         toast({
           title: "Wrong Network",
@@ -282,34 +278,7 @@ export default function SenderPage() {
         return
       }
       
-      if (!splitSaved) {
-        toast({
-          title: "Split Required",
-          description: "Save a split first.",
-          variant: "destructive",
-        })
-        return
-      }
-      
-      if (!amountEth || Number(amountEth) <= 0) {
-        toast({
-          title: "Invalid Amount",
-          description: "Enter a valid amount.",
-          variant: "destructive",
-        })
-        return
-      }
-      
-      if (!tipSplitter) {
-        toast({
-          title: "Configuration Error",
-          description: "Contract address missing",
-          variant: "destructive",
-        })
-        return
-      }
-
-      // Load split config from localStorage
+      // 3) Load split config from localStorage
       const key = getSplitKey(baseSepolia.id, address)
       const splitConfig = loadSplitFromStorage(key)
       
@@ -323,51 +292,81 @@ export default function SenderPage() {
         return
       }
 
+      // 4) Verify total BPS = 10000
+      const totalBps = splitConfig.recipients.reduce((sum, r) => sum + r.bps, 0)
+      if (totalBps !== 10000) {
+        toast({
+          title: "Invalid Split",
+          description: `Total BPS must equal 10000 (current: ${totalBps})`,
+          variant: "destructive",
+        })
+        return
+      }
+      
+      // 5) Validate amount
+      if (!amountEth || Number(amountEth) <= 0) {
+        toast({
+          title: "Invalid Amount",
+          description: "Enter a valid amount.",
+          variant: "destructive",
+        })
+        return
+      }
+
       setIsSending(true)
-      const value = parseEther(amountEth)
 
-      // 1) setSplit on-chain with the locally saved config
-      const recipients = splitConfig.recipients.map(r => ({
-        addr: r.addr as `0x${string}`,
-        shareBps: BigInt(r.bps),
-      }))
+      // 6) Convert amount to wei
+      const totalWei = parseEther(amountEth)
+      const recipients = splitConfig.recipients
 
-      toast({
-        title: "Setting Split",
-        description: "Setting split on-chain...",
-      })
+      // 7) Calculate shares for each recipient
+      const shares: bigint[] = []
+      let distributedWei = BigInt(0)
+
+      for (let i = 0; i < recipients.length; i++) {
+        if (i === recipients.length - 1) {
+          // Last recipient gets the remainder to handle rounding
+          shares.push(totalWei - distributedWei)
+        } else {
+          const shareWei = (totalWei * BigInt(recipients[i].bps)) / BigInt(10000)
+          shares.push(shareWei)
+          distributedWei += shareWei
+        }
+      }
+
+      // 8) Send transactions to each recipient
+      const txHashes: string[] = []
       
-      const tx1 = await writeContract(config, {
-        abi: TipSplitterABI,
-        address: tipSplitter,
-        functionName: "setSplit",
-        args: [recipients],
-        chainId: baseSepolia.id,
-      })
-      await waitForTransactionReceipt(config, { hash: tx1, chainId: baseSepolia.id })
+      for (let i = 0; i < recipients.length; i++) {
+        const recipient = recipients[i]
+        const shareWei = shares[i]
 
-      // 2) deposit() - distributes ETH immediately to recipients
-      toast({
-        title: "Sending Tip",
-        description: "Sending tip and distributing to recipients...",
-      })
-      
-      const tx2 = await writeContract(config, {
-        abi: TipSplitterABI,
-        address: tipSplitter,
-        functionName: "deposit",
-        args: [],
-        value,
-        chainId: baseSepolia.id,
-      })
-      
-      await waitForTransactionReceipt(config, { hash: tx2, chainId: baseSepolia.id })
+        toast({
+          title: "Sending...",
+          description: `Sending ${i + 1}/${recipients.length} to ${recipient.addr.slice(0, 6)}...${recipient.addr.slice(-4)}`,
+        })
 
+        const txHash = await sendTransaction(config, {
+          to: recipient.addr as `0x${string}`,
+          value: shareWei,
+          chainId: baseSepolia.id,
+        })
+
+        await waitForTransactionReceipt(config, { 
+          hash: txHash, 
+          chainId: baseSepolia.id 
+        })
+
+        txHashes.push(txHash)
+      }
+
+      // 9) Success!
+      setIsSending(false)
       toast({
         title: "Success!",
-        description: `Tip sent and distributed! Tx: ${tx2.slice(0, 10)}...${tx2.slice(-8)}`,
+        description: `All ${recipients.length} transactions completed successfully!`,
       })
-      setIsSending(false)
+      
     } catch (e: any) {
       setIsSending(false)
       toast({

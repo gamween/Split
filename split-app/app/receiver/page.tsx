@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { useReadContract } from "wagmi"
+import { keccak256, toBytes } from "viem"
 import ForwarderFactoryABI from "@/src/abi/ForwarderFactory.json"
 import { getSplitKey, saveSplitToStorage, loadSplitFromStorage } from "@/lib/utils"
 import { SplitConfigurator, type Recipient } from "@/components/SplitConfigurator"
@@ -185,10 +186,25 @@ export default function ReceiverPage() {
 
   const factoryAddress = process.env.NEXT_PUBLIC_FACTORY as `0x${string}`
   
-  // Generate a deterministic owner address from the split configuration
-  const derivedOwner = savedRecipients.length > 0 && savedRecipients[0].addr 
-    ? savedRecipients[0].addr 
-    : "0x0000000000000000000000000000000000000001"
+  // Generate a unique owner address by hashing the entire split configuration
+  // This ensures a different address for each unique combination of recipients + BPS
+  const derivedOwner = (() => {
+    if (savedRecipients.length === 0 || !savedRecipients[0].addr) {
+      return "0x0000000000000000000000000000000000000001"
+    }
+    
+    // Create a deterministic string from all recipients and their BPS values
+    const configString = savedRecipients
+      .map(r => `${r.addr.toLowerCase()}-${r.bps}`)
+      .sort() // Sort to ensure consistent ordering
+      .join("|")
+    
+    // Hash the configuration to get a unique identifier
+    const hash = keccak256(toBytes(configString))
+    
+    // Use the hash as the owner address (take first 20 bytes)
+    return `0x${hash.slice(2, 42)}` as `0x${string}`
+  })()
 
   const { data: computedForwarder } = useReadContract({
     address: factoryAddress,
@@ -206,11 +222,14 @@ export default function ReceiverPage() {
   }, [step1Done, computedForwarder])
 
   function handleSaveSplit(recipients: Recipient[]): void {
-    // Save to localStorage only - NO on-chain transaction
-    // Use first recipient address as key identifier
-    const keyIdentifier = recipients.length > 0 && recipients[0].addr 
-      ? recipients[0].addr 
-      : `temp_${Date.now()}`
+    // Save to localStorage - use hash of configuration as key
+    const configString = recipients
+      .map(r => `${r.addr.toLowerCase()}-${r.bps}`)
+      .sort()
+      .join("|")
+    
+    const hash = keccak256(toBytes(configString))
+    const keyIdentifier = `0x${hash.slice(2, 42)}`
     
     const key = getSplitKey(84532, keyIdentifier) // Base Sepolia chainId
     const config = {
