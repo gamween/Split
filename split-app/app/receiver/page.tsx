@@ -181,7 +181,6 @@ const grayButtonDisabledStyle = {
 export default function ReceiverPage() {
   const [savedRecipients, setSavedRecipients] = useState<Recipient[]>([{ addr: "", bps: 0 }])
   const [forwarder, setForwarder] = useState<string>("")
-  const [paylink, setPaylink] = useState<string>("")
   const [step1Done, setStep1Done] = useState<boolean>(false)
 
   const factoryAddress = process.env.NEXT_PUBLIC_FACTORY as `0x${string}`
@@ -203,7 +202,6 @@ export default function ReceiverPage() {
     if (step1Done && computedForwarder) {
       const fwdAddress = computedForwarder as string
       setForwarder(fwdAddress)
-      setPaylink(`ethereum:${fwdAddress}`)
     }
   }, [step1Done, computedForwarder])
 
@@ -236,14 +234,6 @@ export default function ReceiverPage() {
     navigator.clipboard.writeText(forwarder).then(
       () => toast({ title: "Success", description: "Address copied" }),
       () => toast({ title: "Error", description: "Failed to copy address", variant: "destructive" })
-    )
-  }
-
-  function onCopyPaymentLink(): void {
-    if (!paylink) return
-    navigator.clipboard.writeText(paylink).then(
-      () => toast({ title: "Success", description: "Payment link copied" }),
-      () => toast({ title: "Error", description: "Failed to copy link", variant: "destructive" })
     )
   }
 
@@ -333,7 +323,7 @@ export default function ReceiverPage() {
                     color: "#1e40af",
                     lineHeight: "1.5"
                   }}>
-                    💡 Share this address to receive payments. The forwarder contract will be deployed automatically on the first payment.
+                    Share this address to receive payments. The forwarder contract will be deployed automatically on the first payment.
                   </div>
                   
                   <div style={{ marginBottom: "20px" }}>
@@ -364,44 +354,24 @@ export default function ReceiverPage() {
                         marginBottom: "12px",
                       }}
                     />
-                    <div style={{ display: "flex", gap: "10px" }}>
-                      <button
-                        id="btn-copy-address"
-                        onClick={onCopyAddress}
-                        disabled={!forwarder}
-                        style={
-                          !forwarder
-                            ? grayButtonDisabledStyle
-                            : grayButtonStyle
-                        }
-                        onMouseEnter={(e) => {
-                          if (forwarder) e.currentTarget.style.backgroundColor = "#525252"
-                        }}
-                        onMouseLeave={(e) => {
-                          if (forwarder) e.currentTarget.style.backgroundColor = "#737373"
-                        }}
-                      >
-                        Copy address
-                      </button>
-                      <button
-                        id="btn-copy-payment-link"
-                        onClick={onCopyPaymentLink}
-                        disabled={!paylink}
-                        style={
-                          !paylink
-                            ? grayButtonDisabledStyle
-                            : grayButtonStyle
-                        }
-                        onMouseEnter={(e) => {
-                          if (paylink) e.currentTarget.style.backgroundColor = "#525252"
-                        }}
-                        onMouseLeave={(e) => {
-                          if (paylink) e.currentTarget.style.backgroundColor = "#737373"
-                        }}
-                      >
-                        Copy payment link
-                      </button>
-                    </div>
+                    <button
+                      id="btn-copy-address"
+                      onClick={onCopyAddress}
+                      disabled={!forwarder}
+                      style={
+                        !forwarder
+                          ? grayButtonDisabledStyle
+                          : grayButtonStyle
+                      }
+                      onMouseEnter={(e) => {
+                        if (forwarder) e.currentTarget.style.backgroundColor = "#525252"
+                      }}
+                      onMouseLeave={(e) => {
+                        if (forwarder) e.currentTarget.style.backgroundColor = "#737373"
+                      }}
+                    >
+                      Copy address
+                    </button>
                   </div>
                 </>
               ) : (
