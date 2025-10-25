@@ -11,6 +11,7 @@ import { injected } from "wagmi/connectors"
 import TipSplitterABIJson from "@/src/abi/TipSplitter.json"
 import { getSplitKey, saveSplitToStorage, loadSplitFromStorage } from "@/lib/utils"
 import { SplitConfigurator, type Recipient } from "@/components/SplitConfigurator"
+import { toast } from "@/components/ui/use-toast"
 
 const TipSplitterABI = TipSplitterABIJson as any
 
@@ -166,33 +167,6 @@ function InteractiveBackground() {
   return <canvas ref={canvasRef} style={{ position: "fixed", top: 0, left: 0, zIndex: -1 }} />
 }
 
-function Toast({ message, onClose }: { message: string; onClose: () => void }) {
-  useEffect(() => {
-    const timer = setTimeout(onClose, 3000)
-    return () => clearTimeout(timer)
-  }, [onClose])
-
-  return (
-    <div
-      style={{
-        position: "fixed",
-        top: "24px",
-        right: "24px",
-        backgroundColor: "#262626",
-        color: "#fafafa",
-        padding: "0.875rem 1.25rem",
-        borderRadius: "8px",
-        boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
-        zIndex: 1000,
-        fontSize: "0.875rem",
-        fontWeight: "500",
-      }}
-    >
-      {message}
-    </div>
-  )
-}
-
 const grayButtonStyle = {
   padding: "0.5rem 1rem",
   backgroundColor: "#737373",
@@ -214,7 +188,6 @@ const grayButtonDisabledStyle = {
 export default function SenderPage() {
   const [savedRecipients, setSavedRecipients] = useState<Recipient[]>([{ addr: "", bps: 0 }])
   const [amountEth, setAmountEth] = useState<string>("0.01")
-  const [toast, setToast] = useState<string>("")
   const [splitSaved, setSplitSaved] = useState<boolean>(false)
   const [isSending, setIsSending] = useState<boolean>(false)
 
@@ -245,18 +218,19 @@ export default function SenderPage() {
   // Détection du mauvais réseau à la connexion
   useEffect(() => {
     if (isConnected && !isCorrectChain) {
-      setToast("Please switch your wallet to Base Sepolia to continue.")
+      toast({
+        title: "Wrong Network",
+        description: "Please switch your wallet to Base Sepolia to continue.",
+        variant: "destructive",
+      })
     }
   }, [isConnected, isCorrectChain])
 
   function handleSaveSplit(recipients: Recipient[]): void {
-    if (!address) {
-      setToast("❌ Connect your wallet first.")
-      return
-    }
-
+    // NO wallet check here - Save split works without wallet connection
+    
     // Save split to localStorage only - NO on-chain transaction
-    const key = getSplitKey(baseSepolia.id, address)
+    const key = address ? getSplitKey(baseSepolia.id, address) : `split_temp_${Date.now()}`
     const config = {
       recipients: recipients.map(r => ({ addr: r.addr, bps: r.bps })),
       updatedAt: Date.now()
@@ -265,25 +239,43 @@ export default function SenderPage() {
     saveSplitToStorage(key, config)
     setSavedRecipients(recipients)
     setSplitSaved(true)
+    
+    // Success toast is already handled by SplitConfigurator
   }
 
   async function onSendTip(): Promise<void> {
     try {
+      // Check wallet connection first
       if (!isConnected || !address) {
-        setToast("❌ Connect your wallet first.")
+        toast({
+          title: "Wallet Required",
+          description: "Connect your wallet first.",
+          variant: "destructive",
+        })
         return
       }
       
       // Vérification de la chaîne
       if (!isCorrectChain) {
-        setToast("Please switch your wallet to Base Sepolia to continue.")
+        toast({
+          title: "Wrong Network",
+          description: "Please switch your wallet to Base Sepolia to continue.",
+          variant: "destructive",
+        })
         if (switchChain) {
           try {
             await switchChain({ chainId: baseSepolia.id })
-            setToast("⏳ Switching to Base Sepolia...")
+            toast({
+              title: "Switching Network",
+              description: "Switching to Base Sepolia...",
+            })
             return
           } catch (switchError) {
-            setToast("Failed to switch network. Please switch manually to Base Sepolia in your wallet.")
+            toast({
+              title: "Network Switch Failed",
+              description: "Failed to switch network. Please switch manually to Base Sepolia in your wallet.",
+              variant: "destructive",
+            })
             return
           }
         }
@@ -291,17 +283,29 @@ export default function SenderPage() {
       }
       
       if (!splitSaved) {
-        setToast("❌ Save the split first.")
+        toast({
+          title: "Split Required",
+          description: "Save a split first.",
+          variant: "destructive",
+        })
         return
       }
       
       if (!amountEth || Number(amountEth) <= 0) {
-        setToast("❌ Enter a valid amount.")
+        toast({
+          title: "Invalid Amount",
+          description: "Enter a valid amount.",
+          variant: "destructive",
+        })
         return
       }
       
       if (!tipSplitter) {
-        setToast("❌ Contract address missing")
+        toast({
+          title: "Configuration Error",
+          description: "Contract address missing",
+          variant: "destructive",
+        })
         return
       }
 
@@ -310,7 +314,11 @@ export default function SenderPage() {
       const splitConfig = loadSplitFromStorage(key)
       
       if (!splitConfig || splitConfig.recipients.length === 0) {
-        setToast("❌ No split configuration found. Please save your split first.")
+        toast({
+          title: "Split Required",
+          description: "No split configuration found. Please save your split first.",
+          variant: "destructive",
+        })
         setSplitSaved(false)
         return
       }
@@ -324,7 +332,11 @@ export default function SenderPage() {
         shareBps: BigInt(r.bps),
       }))
 
-      setToast("⏳ Setting split on-chain...")
+      toast({
+        title: "Setting Split",
+        description: "Setting split on-chain...",
+      })
+      
       const tx1 = await writeContract(config, {
         abi: TipSplitterABI,
         address: tipSplitter,
@@ -335,7 +347,11 @@ export default function SenderPage() {
       await waitForTransactionReceipt(config, { hash: tx1, chainId: baseSepolia.id })
 
       // 2) deposit() - distributes ETH immediately to recipients
-      setToast("⏳ Sending tip and distributing to recipients...")
+      toast({
+        title: "Sending Tip",
+        description: "Sending tip and distributing to recipients...",
+      })
+      
       const tx2 = await writeContract(config, {
         abi: TipSplitterABI,
         address: tipSplitter,
@@ -347,18 +363,24 @@ export default function SenderPage() {
       
       await waitForTransactionReceipt(config, { hash: tx2, chainId: baseSepolia.id })
 
-      setToast(`✅ Tip sent and distributed! Tx: ${tx2.slice(0, 10)}...${tx2.slice(-8)}`)
+      toast({
+        title: "Success!",
+        description: `Tip sent and distributed! Tx: ${tx2.slice(0, 10)}...${tx2.slice(-8)}`,
+      })
       setIsSending(false)
     } catch (e: any) {
       setIsSending(false)
-      setToast(`❌ ${e?.shortMessage || e?.message || "Transaction failed"}`)
+      toast({
+        title: "Transaction Failed",
+        description: e?.shortMessage || e?.message || "Transaction failed",
+        variant: "destructive",
+      })
     }
   }
 
   return (
     <>
       <InteractiveBackground />
-      {toast && <Toast message={toast} onClose={() => setToast("")} />}
       <div
         style={{
           minHeight: "100vh",
