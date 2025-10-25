@@ -26,7 +26,7 @@ Small groups that repeatedly share money: friends and roommates, tip pools and s
 
 ## Who are your closest competitors and how are you different?
 
-Closest: Multisender (https://multisender.app) and MetaSender (https://metasender.app) for bulk distributions, and Request Finance (https://request.finance) for invoicing and ops. Those products excel at scheduled payrolls, airdrops, or accounting flows that start with a dashboard and often require repeating setup or uploading lists each time. Split is different: it serves recurring, lightweight, human-to-human payments. Configure once, then any future payment to the group's address is auto-split. It's the "last-mile" of onchain finance where social coordination matters.
+Closest adjacent projects in the Base Batches track include SplitBill (https://splitbillbase.vercel.app) and Splitmaster (https://splitbase-tau.vercel.app). Both focus on coordinating the splitting moment: tracking items, managing groups, embedding in chats, or adding social/payment context. Spl!t does not do any of that. Spl!t only solves one thing: a deterministic on-chain forwarder that routes funds at the moment of payment. No bill screens, no chat, no escrow, no reminders. This is not "manage the split later," it is remove the need to split in the first place. Where others add workflow around the payment, Spl!t erases the workflow entirely.
 
 ## What is your distribution strategy and why?
 
