@@ -9,6 +9,7 @@ export type Recipient = { addr: string; bps: number }
 type Props = {
   initial?: Recipient[]
   onSave: (recipients: Recipient[]) => void
+  onClear?: () => void
   className?: string
   ctaLabel?: string
 }
@@ -50,7 +51,7 @@ function validate(rows: Recipient[]): string[] {
   return errors
 }
 
-export function SplitConfigurator({ initial = [{ addr: "", bps: 0 }], onSave, className = "", ctaLabel = "Save Split" }: Props) {
+export function SplitConfigurator({ initial = [{ addr: "", bps: 0 }], onSave, onClear, className = "", ctaLabel = "Save Split" }: Props) {
   const [rows, setRows] = useState<Recipient[]>(initial)
 
   function setRow(i: number, patch: Partial<Recipient>) {
@@ -74,8 +75,14 @@ export function SplitConfigurator({ initial = [{ addr: "", bps: 0 }], onSave, cl
     setRows(next)
   }
 
-  function onClear(): void {
+  function handleClear(): void {
     setRows([{ addr: "", bps: 0 }])
+    
+    // Call parent's onClear if provided
+    if (onClear) {
+      onClear()
+    }
+    
     toast({
       title: "Cleared",
       description: "Split configuration has been reset",
@@ -140,7 +147,7 @@ export function SplitConfigurator({ initial = [{ addr: "", bps: 0 }], onSave, cl
         </h2>
         <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
           <button
-            onClick={onClear}
+            onClick={handleClear}
             style={{
               padding: "0.5rem 1rem",
               backgroundColor: "#737373",

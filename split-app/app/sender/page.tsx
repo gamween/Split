@@ -197,6 +197,15 @@ export default function SenderPage() {
 
   const isCorrectChain = chainId === baseSepolia.id
 
+  // Disconnect wallet on initial page load only
+  useEffect(() => {
+    const hasDisconnected = sessionStorage.getItem('sender_disconnected')
+    if (isConnected && !hasDisconnected) {
+      disconnect()
+      sessionStorage.setItem('sender_disconnected', 'true')
+    }
+  }, [])
+
   // Load split config from localStorage on wallet connection
   useEffect(() => {
     if (address) {
@@ -237,6 +246,19 @@ export default function SenderPage() {
     setSplitSaved(true)
     
     // Success toast is already handled by SplitConfigurator
+  }
+
+  function handleClearSplit(): void {
+    setSavedRecipients([{ addr: "", bps: 0 }])
+    setSplitSaved(false)
+    
+    // Disconnect wallet
+    if (isConnected) {
+      disconnect()
+    }
+    
+    // Reset sessionStorage flag
+    sessionStorage.removeItem('sender_disconnected')
   }
 
   async function onSendTip(): Promise<void> {
@@ -423,6 +445,7 @@ export default function SenderPage() {
           <SplitConfigurator
             initial={savedRecipients}
             onSave={handleSaveSplit}
+            onClear={handleClearSplit}
             className="mb-6"
           />
 
