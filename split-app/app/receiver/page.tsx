@@ -2,9 +2,13 @@
 
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
-import { useReadContract } from "wagmi"
-import { keccak256, toBytes } from "viem"
+import { useAccount, useConnect, useDisconnect, useChainId, useSwitchChain, useReadContract } from "wagmi"
+import { useConfig } from "wagmi"
+import { writeContract, waitForTransactionReceipt } from "@wagmi/core"
+import { baseSepolia } from "viem/chains"
+import { injected } from "wagmi/connectors"
 import ForwarderFactoryABI from "@/src/abi/ForwarderFactory.json"
+import TipSplitterABI from "@/src/abi/TipSplitter.json"
 import { getSplitKey, saveSplitToStorage, loadSplitFromStorage } from "@/lib/utils"
 import { SplitConfigurator, type Recipient } from "@/components/SplitConfigurator"
 import { toast } from "@/components/ui/use-toast"
@@ -183,55 +187,48 @@ export default function ReceiverPage() {
   const [savedRecipients, setSavedRecipients] = useState<Recipient[]>([{ addr: "", bps: 0 }])
   const [forwarder, setForwarder] = useState<string>("")
   const [step1Done, setStep1Done] = useState<boolean>(false)
+  const [isRegistering, setIsRegistering] = useState<boolean>(false)
 
   const factoryAddress = process.env.NEXT_PUBLIC_FACTORY as `0x${string}`
+  const tipSplitterAddress = process.env.NEXT_PUBLIC_TIP_SPLITTER as `0x${string}`
   
-  // Generate a unique owner address by hashing the entire split configuration
-  // This ensures a different address for each unique combination of recipients + BPS
-  const derivedOwner = (() => {
-    if (savedRecipients.length === 0 || !savedRecipients[0].addr) {
-      return "0x0000000000000000000000000000000000000001"
-    }
-    
-    // Create a deterministic string from all recipients and their BPS values
-    const configString = savedRecipients
-      .map(r => `${r.addr.toLowerCase()}-${r.bps}`)
-      .sort() // Sort to ensure consistent ordering
-      .join("|")
-    
-    // Hash the configuration to get a unique identifier
-    const hash = keccak256(toBytes(configString))
-    
-    // Use the hash as the owner address (take first 20 bytes)
-    return `0x${hash.slice(2, 42)}` as `0x${string}`
-  })()
+  const { address, isConnected } = useAccount()
+  const { connect, connectors, status: connectStatus } = useConnect()
+  const { disconnect } = useDisconnect()
+  const config = useConfig()
+  const chainId = useChainId()
+  const { switchChain } = useSwitchChain()
+
+  const isCorrectChain = chainId === baseSepolia.id
+  
+  // Use the first recipient address as the owner
+  const ownerAddress = savedRecipients.length > 0 && savedRecipients[0].addr 
+    ? savedRecipients[0].addr 
+    : "0x0000000000000000000000000000000000000001"
 
   const { data: computedForwarder } = useReadContract({
     address: factoryAddress,
     abi: ForwarderFactoryABI,
     functionName: "forwarderAddress",
-    args: [derivedOwner as `0x${string}`],
+    args: [ownerAddress as `0x${string}`],
   })
 
   useEffect(() => {
-    // Automatically display the computed forwarder address when split is saved
+    // Automatically display the computed forwarder address when split is saved and registered
     if (step1Done && computedForwarder) {
       const fwdAddress = computedForwarder as string
       setForwarder(fwdAddress)
     }
   }, [step1Done, computedForwarder])
 
-  function handleSaveSplit(recipients: Recipient[]): void {
-    // Save to localStorage - use hash of configuration as key
-    const configString = recipients
-      .map(r => `${r.addr.toLowerCase()}-${r.bps}`)
-      .sort()
-      .join("|")
-    
-    const hash = keccak256(toBytes(configString))
-    const keyIdentifier = `0x${hash.slice(2, 42)}`
-    
-    const key = getSplitKey(84532, keyIdentifier) // Base Sepolia chainId
+  // Check if wallet is connected as first recipient
+  const isOwnerConnected = isConnected && address && savedRecipients[0]?.addr && 
+    address.toLowerCase() === savedRecipients[0].addr.toLowerCase()
+
+  async function handleSaveSplit(recipients: Recipient[]): Promise<void> {
+    // Save to localStorage
+    const firstRecipient = recipients[0]?.addr || `temp_${Date.now()}`
+    const key = getSplitKey(84532, firstRecipient) // Base Sepolia chainId
     const config = {
       recipients: recipients.map(r => ({ addr: r.addr, bps: r.bps })),
       updatedAt: Date.now()
@@ -239,13 +236,98 @@ export default function ReceiverPage() {
     
     saveSplitToStorage(key, config)
     setSavedRecipients(recipients)
-    setStep1Done(true)
     
-    // Show success message
-    toast({
-      title: "Success",
-      description: "Your payment address is ready to share",
-    })
+    // Success toast is already handled by SplitConfigurator
+  }
+
+  async function handleRegisterSplit(): Promise<void> {
+    try {
+      // 1) Check wallet connection
+      if (!isConnected || !address) {
+        toast({
+          title: "Wallet Required",
+          description: "Connect your wallet first.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      // 2) Check correct chain
+      if (!isCorrectChain) {
+        toast({
+          title: "Wrong Network",
+          description: "Please switch to Base Sepolia.",
+          variant: "destructive",
+        })
+        if (switchChain) {
+          try {
+            await switchChain({ chainId: baseSepolia.id })
+            return
+          } catch (switchError) {
+            return
+          }
+        }
+        return
+      }
+
+      // 3) Check if connected wallet is the first recipient
+      if (!isOwnerConnected) {
+        toast({
+          title: "Wrong Wallet",
+          description: `Please connect with the first recipient's wallet: ${savedRecipients[0].addr.slice(0, 6)}...${savedRecipients[0].addr.slice(-4)}`,
+          variant: "destructive",
+        })
+        return
+      }
+
+      setIsRegistering(true)
+
+      // 4) Prepare recipients for contract
+      const contractRecipients = savedRecipients.map(r => ({
+        addr: r.addr as `0x${string}`,
+        shareBps: BigInt(r.bps),
+      }))
+
+      // 5) Call setSplit on TipSplitter
+      toast({
+        title: "Registering Split",
+        description: "Please confirm the transaction in your wallet...",
+      })
+
+      const txHash = await writeContract(config, {
+        address: tipSplitterAddress,
+        abi: TipSplitterABI,
+        functionName: "setSplit",
+        args: [contractRecipients],
+        chainId: baseSepolia.id,
+      })
+
+      toast({
+        title: "Waiting for Confirmation",
+        description: "Transaction submitted, waiting for confirmation...",
+      })
+
+      await waitForTransactionReceipt(config, { 
+        hash: txHash, 
+        chainId: baseSepolia.id 
+      })
+
+      setStep1Done(true)
+      setIsRegistering(false)
+
+      toast({
+        title: "Success!",
+        description: "Split registered on-chain. Your payment address is ready!",
+      })
+
+    } catch (e: any) {
+      setIsRegistering(false)
+      toast({
+        title: "Registration Failed",
+        description: e?.shortMessage || e?.message || "Failed to register split",
+        variant: "destructive",
+      })
+    }
   }
 
   function onCopyAddress(): void {
@@ -315,98 +397,180 @@ export default function ReceiverPage() {
               position: "relative",
             }}
           >
-            <div style={{ pointerEvents: step1Done ? "auto" : "none", opacity: step1Done ? 1 : 0.5 }}>
-              <h2
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                paddingBottom: "20px",
+                borderBottom: "1px solid #f5f5f5",
+                marginBottom: "24px",
+              }}
+            >
+              <h2 style={{ fontSize: "1.125rem", fontWeight: "600", color: "#171717", margin: 0 }}>
+                Register Split & Get Address
+              </h2>
+              <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                {isConnected && address ? (
+                  <>
+                    <span style={{ fontSize: "0.75rem", color: "#737373" }}>
+                      {address.slice(0, 6)}...{address.slice(-4)}
+                    </span>
+                    <button
+                      onClick={() => disconnect()}
+                      style={{
+                        padding: "0.5rem 1rem",
+                        backgroundColor: "#ef4444",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "6px",
+                        cursor: "pointer",
+                        fontSize: "0.8125rem",
+                        fontWeight: "500",
+                        transition: "background-color 0.15s ease",
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#dc2626")}
+                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#ef4444")}
+                    >
+                      Disconnect
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => connect({ connector: connectors[0] || injected() })}
+                    disabled={connectStatus === "pending"}
+                    style={{
+                      padding: "0.5rem 1rem",
+                      backgroundColor: connectStatus === "pending" ? "#d4d4d4" : "#262626",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "6px",
+                      cursor: connectStatus === "pending" ? "not-allowed" : "pointer",
+                      fontSize: "0.8125rem",
+                      fontWeight: "500",
+                      transition: "background-color 0.15s ease",
+                    }}
+                    onMouseEnter={(e) => {
+                      if (connectStatus !== "pending") e.currentTarget.style.backgroundColor = "#404040"
+                    }}
+                    onMouseLeave={(e) => {
+                      if (connectStatus !== "pending") e.currentTarget.style.backgroundColor = "#262626"
+                    }}
+                  >
+                    {connectStatus === "pending" ? "Connecting..." : "Connect Wallet"}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {!step1Done && savedRecipients[0]?.addr && (
+              <div style={{ 
+                padding: "12px 16px",
+                backgroundColor: "#fef3c7",
+                border: "1px solid #fbbf24",
+                borderRadius: "8px",
+                marginBottom: "20px",
+                fontSize: "0.8125rem",
+                color: "#92400e",
+                lineHeight: "1.5"
+              }}>
+                <strong>Important:</strong> Connect with the first recipient's wallet ({savedRecipients[0].addr.slice(0, 6)}...{savedRecipients[0].addr.slice(-4)}) to register the split on-chain.
+              </div>
+            )}
+
+            {!step1Done ? (
+              <button
+                onClick={handleRegisterSplit}
+                disabled={!isOwnerConnected || isRegistering || !isCorrectChain}
                 style={{
-                  fontSize: "1.125rem",
+                  width: "100%",
+                  padding: "0.875rem",
+                  backgroundColor: (!isOwnerConnected || isRegistering || !isCorrectChain) ? "#d4d4d4" : "#262626",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "8px",
+                  cursor: (!isOwnerConnected || isRegistering || !isCorrectChain) ? "not-allowed" : "pointer",
+                  fontSize: "0.9375rem",
                   fontWeight: "600",
-                  paddingBottom: "20px",
-                  borderBottom: "1px solid #f5f5f5",
-                  color: "#171717",
-                  margin: 0,
-                  marginBottom: "24px",
+                  transition: "background-color 0.15s ease",
+                }}
+                onMouseEnter={(e) => {
+                  if (isOwnerConnected && !isRegistering && isCorrectChain) {
+                    e.currentTarget.style.backgroundColor = "#404040"
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (isOwnerConnected && !isRegistering && isCorrectChain) {
+                    e.currentTarget.style.backgroundColor = "#262626"
+                  }
                 }}
               >
-                Your payment target
-              </h2>
-
-              {forwarder ? (
-                <>
-                  <div style={{ 
-                    padding: "12px 16px",
-                    backgroundColor: "#f0f9ff",
-                    border: "1px solid #bfdbfe",
-                    borderRadius: "8px",
-                    marginBottom: "20px",
-                    fontSize: "0.8125rem",
-                    color: "#1e40af",
-                    lineHeight: "1.5"
-                  }}>
-                    Share this address to receive payments. The forwarder contract will be deployed automatically on the first payment.
-                  </div>
-                  
-                  <div style={{ marginBottom: "20px" }}>
-                    <label
-                      style={{
-                        display: "block",
-                        marginBottom: "8px",
-                        fontSize: "0.8125rem",
-                        fontWeight: "600",
-                        color: "#404040",
-                      }}
-                    >
-                      Unique address
-                    </label>
-                    <input
-                      id="forwarder"
-                      type="text"
-                      value={forwarder}
-                      readOnly
-                      style={{
-                        width: "100%",
-                        padding: "0.625rem 0.875rem",
-                        border: "1px solid #d4d4d4",
-                        borderRadius: "6px",
-                        fontSize: "0.875rem",
-                        backgroundColor: "#f9fafb",
-                        color: "#525252",
-                        marginBottom: "12px",
-                      }}
-                    />
-                    <button
-                      id="btn-copy-address"
-                      onClick={onCopyAddress}
-                      disabled={!forwarder}
-                      style={
-                        !forwarder
-                          ? grayButtonDisabledStyle
-                          : grayButtonStyle
-                      }
-                      onMouseEnter={(e) => {
-                        if (forwarder) e.currentTarget.style.backgroundColor = "#525252"
-                      }}
-                      onMouseLeave={(e) => {
-                        if (forwarder) e.currentTarget.style.backgroundColor = "#737373"
-                      }}
-                    >
-                      Copy address
-                    </button>
-                  </div>
-                </>
-              ) : (
+                {isRegistering ? "Registering..." : !isCorrectChain && isConnected ? "Wrong Network" : "Register Split On-Chain"}
+              </button>
+            ) : (
+              <>
                 <div style={{ 
-                  padding: "24px",
-                  backgroundColor: "#fafafa",
-                  border: "1px dashed #d4d4d4",
+                  padding: "12px 16px",
+                  backgroundColor: "#f0f9ff",
+                  border: "1px solid #bfdbfe",
                   borderRadius: "8px",
-                  textAlign: "center",
-                  color: "#737373",
-                  fontSize: "0.875rem"
+                  marginBottom: "20px",
+                  fontSize: "0.8125rem",
+                  color: "#1e40af",
+                  lineHeight: "1.5"
                 }}>
-                  Save your split configuration to get your payment address
+                  ✅ Split registered! Share this address to receive payments. The forwarder will deploy automatically on first payment and distribute ETH according to your configuration.
                 </div>
-              )}
-            </div>
+                
+                <div style={{ marginBottom: "20px" }}>
+                  <label
+                    style={{
+                      display: "block",
+                      marginBottom: "8px",
+                      fontSize: "0.8125rem",
+                      fontWeight: "600",
+                      color: "#404040",
+                    }}
+                  >
+                    Unique payment address
+                  </label>
+                  <input
+                    id="forwarder"
+                    type="text"
+                    value={forwarder}
+                    readOnly
+                    style={{
+                      width: "100%",
+                      padding: "0.625rem 0.875rem",
+                      border: "1px solid #d4d4d4",
+                      borderRadius: "6px",
+                      fontSize: "0.875rem",
+                      backgroundColor: "#f9fafb",
+                      color: "#525252",
+                      marginBottom: "12px",
+                    }}
+                  />
+                  <button
+                    id="btn-copy-address"
+                    onClick={onCopyAddress}
+                    disabled={!forwarder}
+                    style={
+                      !forwarder
+                        ? grayButtonDisabledStyle
+                        : grayButtonStyle
+                    }
+                    onMouseEnter={(e) => {
+                      if (forwarder) e.currentTarget.style.backgroundColor = "#525252"
+                    }}
+                    onMouseLeave={(e) => {
+                      if (forwarder) e.currentTarget.style.backgroundColor = "#737373"
+                    }}
+                  >
+                    Copy address
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
