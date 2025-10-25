@@ -188,6 +188,7 @@ export default function ReceiverPage() {
   const [forwarder, setForwarder] = useState<string>("")
   const [step1Done, setStep1Done] = useState<boolean>(false)
   const [isRegistering, setIsRegistering] = useState<boolean>(false)
+  const [showTooltip, setShowTooltip] = useState<boolean>(false)
 
   const factoryAddress = process.env.NEXT_PUBLIC_FACTORY as `0x${string}`
   const tipSplitterAddress = process.env.NEXT_PUBLIC_TIP_SPLITTER as `0x${string}`
@@ -220,10 +221,6 @@ export default function ReceiverPage() {
       setForwarder(fwdAddress)
     }
   }, [step1Done, computedForwarder])
-
-  // Check if wallet is connected as first recipient
-  const isOwnerConnected = isConnected && address && savedRecipients[0]?.addr && 
-    address.toLowerCase() === savedRecipients[0].addr.toLowerCase()
 
   async function handleSaveSplit(recipients: Recipient[]): Promise<void> {
     // Save to localStorage
@@ -271,10 +268,10 @@ export default function ReceiverPage() {
       }
 
       // 3) Check if connected wallet is the first recipient
-      if (!isOwnerConnected) {
+      if (!isConnected || !address) {
         toast({
-          title: "Wrong Wallet",
-          description: `Please connect with the first recipient's wallet: ${savedRecipients[0].addr.slice(0, 6)}...${savedRecipients[0].addr.slice(-4)}`,
+          title: "Wallet Required",
+          description: "Connect your wallet to register the split.",
           variant: "destructive",
         })
         return
@@ -463,65 +460,91 @@ export default function ReceiverPage() {
               </div>
             </div>
 
-            {!step1Done && savedRecipients[0]?.addr && (
-              <div style={{ 
-                padding: "12px 16px",
-                backgroundColor: "#fef3c7",
-                border: "1px solid #fbbf24",
-                borderRadius: "8px",
-                marginBottom: "20px",
-                fontSize: "0.8125rem",
-                color: "#92400e",
-                lineHeight: "1.5"
-              }}>
-                <strong>Important:</strong> Connect with the first recipient's wallet ({savedRecipients[0].addr.slice(0, 6)}...{savedRecipients[0].addr.slice(-4)}) to register the split on-chain.
-              </div>
-            )}
-
             {!step1Done ? (
-              <button
-                onClick={handleRegisterSplit}
-                disabled={!isOwnerConnected || isRegistering || !isCorrectChain}
-                style={{
-                  width: "100%",
-                  padding: "0.875rem",
-                  backgroundColor: (!isOwnerConnected || isRegistering || !isCorrectChain) ? "#d4d4d4" : "#262626",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "8px",
-                  cursor: (!isOwnerConnected || isRegistering || !isCorrectChain) ? "not-allowed" : "pointer",
-                  fontSize: "0.9375rem",
-                  fontWeight: "600",
-                  transition: "background-color 0.15s ease",
-                }}
-                onMouseEnter={(e) => {
-                  if (isOwnerConnected && !isRegistering && isCorrectChain) {
-                    e.currentTarget.style.backgroundColor = "#404040"
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (isOwnerConnected && !isRegistering && isCorrectChain) {
-                    e.currentTarget.style.backgroundColor = "#262626"
-                  }
-                }}
-              >
-                {isRegistering ? "Registering..." : !isCorrectChain && isConnected ? "Wrong Network" : "Register Split On-Chain"}
-              </button>
+              <>
+                <div style={{ marginBottom: "20px" }}>
+                  <button
+                    onClick={handleRegisterSplit}
+                    disabled={!isConnected || isRegistering || !isCorrectChain}
+                    style={{
+                      width: "100%",
+                      padding: "0.875rem",
+                      backgroundColor: (!isConnected || isRegistering || !isCorrectChain) ? "#d4d4d4" : "#262626",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "8px",
+                      cursor: (!isConnected || isRegistering || !isCorrectChain) ? "not-allowed" : "pointer",
+                      fontSize: "0.9375rem",
+                      fontWeight: "600",
+                      transition: "background-color 0.15s ease",
+                    }}
+                    onMouseEnter={(e) => {
+                      if (isConnected && !isRegistering && isCorrectChain) {
+                        e.currentTarget.style.backgroundColor = "#404040"
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (isConnected && !isRegistering && isCorrectChain) {
+                        e.currentTarget.style.backgroundColor = "#262626"
+                      }
+                    }}
+                  >
+                    {isRegistering ? "Registering..." : !isCorrectChain && isConnected ? "Wrong Network" : "Register Split On-Chain"}
+                  </button>
+                </div>
+
+                <div style={{ textAlign: "center", position: "relative", marginTop: "16px" }}>
+                  <span 
+                    onMouseEnter={() => setShowTooltip(true)}
+                    onMouseLeave={() => setShowTooltip(false)}
+                    style={{ 
+                      fontSize: "0.8125rem", 
+                      color: "#737373",
+                      cursor: "help",
+                      borderBottom: "1px dotted #737373",
+                      position: "relative"
+                    }}
+                  >
+                    Why are you paying fees?
+                  </span>
+                  
+                  {showTooltip && (
+                    <div style={{
+                      position: "absolute",
+                      bottom: "100%",
+                      left: "50%",
+                      transform: "translateX(-50%)",
+                      marginBottom: "8px",
+                      padding: "12px 16px",
+                      backgroundColor: "#262626",
+                      color: "white",
+                      borderRadius: "8px",
+                      fontSize: "0.75rem",
+                      lineHeight: "1.5",
+                      maxWidth: "300px",
+                      width: "max-content",
+                      boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                      zIndex: 1000,
+                      textAlign: "left"
+                    }}>
+                      To generate your unique payment address, the split configuration needs to be registered on-chain. This requires a small gas fee (usually a few cents). Any wallet can pay this fee - it doesn't have to be one of the recipients.
+                      <div style={{
+                        position: "absolute",
+                        top: "100%",
+                        left: "50%",
+                        transform: "translateX(-50%)",
+                        width: 0,
+                        height: 0,
+                        borderLeft: "6px solid transparent",
+                        borderRight: "6px solid transparent",
+                        borderTop: "6px solid #262626"
+                      }} />
+                    </div>
+                  )}
+                </div>
+              </>
             ) : (
               <>
-                <div style={{ 
-                  padding: "12px 16px",
-                  backgroundColor: "#f0f9ff",
-                  border: "1px solid #bfdbfe",
-                  borderRadius: "8px",
-                  marginBottom: "20px",
-                  fontSize: "0.8125rem",
-                  color: "#1e40af",
-                  lineHeight: "1.5"
-                }}>
-                  ✅ Split registered! Share this address to receive payments. The forwarder will deploy automatically on first payment and distribute ETH according to your configuration.
-                </div>
-                
                 <div style={{ marginBottom: "20px" }}>
                   <label
                     style={{
