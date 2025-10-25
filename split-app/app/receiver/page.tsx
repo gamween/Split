@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
-import { useWriteContract, useReadContract, useWaitForTransactionReceipt } from "wagmi"
+import { useReadContract } from "wagmi"
 import ForwarderFactoryABI from "@/src/abi/ForwarderFactory.json"
 import { getSplitKey, saveSplitToStorage, loadSplitFromStorage } from "@/lib/utils"
 import { SplitConfigurator, type Recipient } from "@/components/SplitConfigurator"
@@ -191,9 +191,6 @@ export default function ReceiverPage() {
     ? savedRecipients[0].addr 
     : "0x0000000000000000000000000000000000000001"
 
-  const { writeContract, data: hash, isPending: isDeploying } = useWriteContract()
-  const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash })
-
   const { data: computedForwarder } = useReadContract({
     address: factoryAddress,
     abi: ForwarderFactoryABI,
@@ -202,16 +199,13 @@ export default function ReceiverPage() {
   })
 
   useEffect(() => {
-    if (isConfirmed && computedForwarder) {
+    // Automatically display the computed forwarder address when split is saved
+    if (step1Done && computedForwarder) {
       const fwdAddress = computedForwarder as string
       setForwarder(fwdAddress)
       setPaylink(`ethereum:${fwdAddress}`)
-      toast({
-        title: "Success",
-        description: "Unique address created",
-      })
     }
-  }, [isConfirmed, computedForwarder])
+  }, [step1Done, computedForwarder])
 
   function handleSaveSplit(recipients: Recipient[]): void {
     // Save to localStorage only - NO on-chain transaction
@@ -229,23 +223,11 @@ export default function ReceiverPage() {
     saveSplitToStorage(key, config)
     setSavedRecipients(recipients)
     setStep1Done(true)
-  }
-
-  function onGetForwarder(): void {
-    if (!step1Done) {
-      toast({
-        title: "Split Required",
-        description: "Please save split first",
-        variant: "destructive",
-      })
-      return
-    }
     
-    writeContract({
-      address: factoryAddress,
-      abi: ForwarderFactoryABI,
-      functionName: "getOrDeploy",
-      args: [derivedOwner as `0x${string}`],
+    // Show success message
+    toast({
+      title: "Success",
+      description: "Your payment address is ready to share",
     })
   }
 
@@ -339,40 +321,21 @@ export default function ReceiverPage() {
                 Your payment target
               </h2>
 
-              <div style={{ marginBottom: "24px" }}>
-                <button
-                  id="btn-get-forwarder"
-                  onClick={onGetForwarder}
-                  disabled={isDeploying || isConfirming || !step1Done}
-                  style={{
-                    width: "100%",
-                    padding: "0.75rem 1.25rem",
-                    backgroundColor: (isDeploying || isConfirming || !step1Done) ? "#d4d4d4" : "#262626",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "8px",
-                    cursor: (isDeploying || isConfirming || !step1Done) ? "not-allowed" : "pointer",
-                    fontSize: "0.875rem",
-                    fontWeight: "600",
-                    transition: "background-color 0.15s ease",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isDeploying && !isConfirming && step1Done) {
-                      e.currentTarget.style.backgroundColor = "#404040"
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isDeploying && !isConfirming && step1Done) {
-                      e.currentTarget.style.backgroundColor = "#262626"
-                    }
-                  }}
-                >
-                  {isDeploying || isConfirming ? "Creating..." : "Get unique address"}
-                </button>
-              </div>
-
-              {forwarder && (
+              {forwarder ? (
                 <>
+                  <div style={{ 
+                    padding: "12px 16px",
+                    backgroundColor: "#f0f9ff",
+                    border: "1px solid #bfdbfe",
+                    borderRadius: "8px",
+                    marginBottom: "20px",
+                    fontSize: "0.8125rem",
+                    color: "#1e40af",
+                    lineHeight: "1.5"
+                  }}>
+                    💡 Share this address to receive payments. The forwarder contract will be deployed automatically on the first payment.
+                  </div>
+                  
                   <div style={{ marginBottom: "20px" }}>
                     <label
                       style={{
@@ -441,6 +404,18 @@ export default function ReceiverPage() {
                     </div>
                   </div>
                 </>
+              ) : (
+                <div style={{ 
+                  padding: "24px",
+                  backgroundColor: "#fafafa",
+                  border: "1px dashed #d4d4d4",
+                  borderRadius: "8px",
+                  textAlign: "center",
+                  color: "#737373",
+                  fontSize: "0.875rem"
+                }}>
+                  Save your split configuration to get your payment address
+                </div>
               )}
             </div>
           </div>
