@@ -1,5 +1,9 @@
 # Spl!t
 
+## Built for Base Batches Builder Track
+
+Spl!t was developed as part of the Base Batches Builder Track, a competition focused on building practical onchain applications on Base. The Builder Track challenges developers to create tools that solve real-world problems using smart contracts and onchain infrastructure. Spl!t addresses the fundamental friction in shared payments by making splits automatic, trustless, and invisible—turning coordination overhead into a one-time setup that works forever.
+
 ## The problem Spl!t solves
 
 Spl!t solves the core problem of shared payments without adding layers of features or coordination. Most "split" apps try to track bills, receipts, chats, reminders, or social context — but in reality, the common need is far simpler: one shared payment that automatically routes to everyone, correctly, every time. Spl!t is intentionally minimal: you define the split once, receive a single reusable on-chain address, and any funds sent to it are instantly distributed according to the predefined bps. No reminders, no spreadsheets, no manual math, no social friction. The split becomes invisible because it is built into the payment itself.
@@ -35,7 +39,3 @@ Closest adjacent projects in the Base Batches track include SplitBill (https://s
 ## What is the distribution strategy and why?
 
 Community-first and simplicity-first. Start in Base and Farcaster circles where group payments already happen. One person using Spl!t exposes it to everyone they transact with, so adoption is built into usage. No paid acquisition. Clear docs, a Mini App entry point, and a 15-second demo are enough to seed organic growth.
-
-## Built for Base Batches Builder Track
-
-Spl!t was developed as part of the Base Batches Builder Track, a competition focused on building practical onchain applications on Base. The Builder Track challenges developers to create tools that solve real-world problems using smart contracts and onchain infrastructure. Spl!t addresses the fundamental friction in shared payments by making splits automatic, trustless, and invisible—turning coordination overhead into a one-time setup that works forever.
