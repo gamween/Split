@@ -36,3 +36,6 @@ Closest adjacent projects in the Base Batches track include SplitBill (https://s
 
 Community-first and simplicity-first. Start in Base and Farcaster circles where group payments already happen. One person using Spl!t exposes it to everyone they transact with, so adoption is built into usage. No paid acquisition. Clear docs, a Mini App entry point, and a 15-second demo are enough to seed organic growth.
 
+## Built for Base Batches Builder Track
+
+Spl!t was developed as part of the Base Batches Builder Track, a competition focused on building practical onchain applications on Base. The Builder Track challenges developers to create tools that solve real-world problems using smart contracts and onchain infrastructure. Spl!t addresses the fundamental friction in shared payments by making splits automatic, trustless, and invisible—turning coordination overhead into a one-time setup that works forever.
