@@ -20,19 +20,19 @@ https://split-q4x9i7223-gamween-7559s-projects.vercel.app
 
 https://youtu.be/WiZuRljU_XE
 
-## What is your product's unique value proposition?
+## What is Spl!t's unique value proposition?
 
-Split turns any group into a single payable address that auto-routes funds on receipt. Set the split once, share the address forever, and every payment is distributed on-chain by bps with full transparency. Unlike tools that require custodians, CSV uploads, or post-payment reimbursements, Split is trustless, stateless for senders, and friction-free for receivers. The alpha proves it end-to-end: define recipients, get an address, pay it, and funds arrive split instantly.
+Spl!t turns any group into a single payable address that auto-routes funds on receipt. Set the split once, share the address forever, and every payment is distributed on-chain by bps with full transparency. Unlike tools that require custodians, CSV uploads, or post-payment reimbursements, Spl!t is trustless, stateless for senders, and friction-free for receivers. The product proves it end-to-end: define recipients, get an address, pay it, and funds arrive split instantly.
 
-## Who is your target customer?
+## Who is the target customer?
 
-Small groups that repeatedly share money: friends and roommates, tip pools and service teams, creators and collaborators. In all cases one person usually becomes the banker. Split eliminates that role by giving the group a reusable payment target that pays everyone fairly by design.
+Small groups that repeatedly share money: friends and roommates, tip pools and service teams, creators and collaborators. In all cases one person usually becomes the banker. Spl!t eliminates that role by giving the group a reusable payment target that pays everyone fairly by design.
 
-## Who are your closest competitors and how are you different?
+## Who are the closest competitors and how is Spl!t different?
 
 Closest adjacent projects in the Base Batches track include SplitBill (https://splitbillbase.vercel.app) and Splitmaster (https://splitbase-tau.vercel.app). Both focus on coordinating the splitting moment: tracking items, managing groups, embedding in chats, or adding social/payment context. Spl!t does not do any of that. Spl!t only solves one thing: a deterministic on-chain forwarder that routes funds at the moment of payment. No bill screens, no chat, no escrow, no reminders. This is not "manage the split later," it is remove the need to split in the first place. Where others add workflow around the payment, Spl!t erases the workflow entirely.
 
-## What is your distribution strategy and why?
+## What is the distribution strategy and why?
 
-Community-first and simplicity-first. Start in Base and Farcaster circles where group payments already happen. One person using Split exposes it to everyone they transact with, so adoption is built into usage. No paid acquisition. Clear docs, a Mini App entry point, and a 15-second demo are enough to seed organic growth.
+Community-first and simplicity-first. Start in Base and Farcaster circles where group payments already happen. One person using Spl!t exposes it to everyone they transact with, so adoption is built into usage. No paid acquisition. Clear docs, a Mini App entry point, and a 15-second demo are enough to seed organic growth.
 
