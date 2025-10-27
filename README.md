@@ -8,13 +8,17 @@ Spl!t solves the core problem of shared payments without adding layers of featur
 
 I'm new to Solidity/Base, so deploying safely and wiring wallets, factories, and tooling was a learning curve. The hardest piece was the forwarder: a factory that deterministically creates a unique receive address for each owner, then routes incoming funds to recipients by bps without extra signatures. Getting correctness around rounding, reentrancy, and efficient payouts took trial, tests, and several refactors, but once stable it unlocked the "send once, split automatically" experience.
 
-## Link to the GitHub Repo of your project
+## Link to the GitHub Repo
 
 https://github.com/gamween/Split
 
-## Live URL of your project
+## Live URL
 
 https://split-q4x9i7223-gamween-7559s-projects.vercel.app
+
+## Video presentation
+
+https://youtu.be/WiZuRljU_XE
 
 ## What is your product's unique value proposition?
 
